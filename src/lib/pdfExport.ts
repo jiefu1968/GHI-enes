@@ -32,9 +32,34 @@ const RED = [170, 70, 60] as const;
 // WinAnsi range (emoji, dingbats, arrows, variation selectors) — keeps
 // accented Latin letters, em/en dashes, curly quotes, and normal
 // punctuation intact, since those DO render correctly.
+// Converts common LaTeX math notation to plain readable text before
+// PDF export. The chat UI renders LaTeX fine (it's shown as styled math
+// on screen), but jsPDF has no LaTeX engine — without this, formulas
+// like "\\[ P \\lor \\not P \\]" showed up as raw LaTeX commands in the
+// PDF instead of readable text. Covers the operators/spacing commands
+// that actually show up in this app's theological-logic responses;
+// intentionally simple (regex, not a real LaTeX parser) since full
+// LaTeX rendering in a PDF text layer isn't worth the complexity here.
+function delatex(text: string): string {
+  return text
+    .replace(/\\\[|\\\]/g, "") // \[ ... \] display-math delimiters
+    .replace(/\\\(|\\\)/g, "") // \( ... \) inline-math delimiters
+    .replace(/\\lor/g, "or")
+    .replace(/\\land/g, "and")
+    .replace(/\\neg|\\not/g, "not ")
+    .replace(/\\forall/g, "for all")
+    .replace(/\\exists/g, "there exists")
+    .replace(/\\implies|\\rightarrow|\\to/g, "implies")
+    .replace(/\\iff|\\leftrightarrow/g, "if and only if")
+    .replace(/\\in/g, "in")
+    .replace(/\\neq/g, "not equal to")
+    .replace(/\\[,;: ]/g, " ") // \;  \,  \:  spacing commands
+    .replace(/\\text\{([^}]*)\}/g, "$1");
+}
+
 function sanitizeForPdf(text: string): string {
   if (!text) return "";
-  return text
+  return delatex(text)
     .replace(/^#{1,6}\s*/gm, "")
     .replace(/\*\*(.*?)\*\*/g, "$1")
     .replace(/\*(.*?)\*/g, "$1")
