@@ -1,0 +1,16 @@
+# Mission Through History: Bosch's Paradigm Shifts and Latourette's Narrative
+
+Mission theology has never been static. David Bosch's landmark work "Transforming Mission" argues that the church's operating understanding of mission has gone through several major paradigm shifts, each shaped by the church's broader theological and cultural context. Kenneth Scott Latourette's multi-volume history supplies the detailed narrative record of how mission actually expanded, era by era, that Bosch's paradigms interpret.
+
+## Bosch's paradigms (a rough sketch, not a rigid checklist)
+1. **Eastern/patristic paradigm** — mission understood substantially through the framework of the church as the visible sign and instrument of God's kingdom, shaped by early creedal controversies.
+2. **Medieval Catholic (Roman Catholic) paradigm** — mission tied closely to the expansion of Christendom, often bound up with political and imperial power, "conversion" understood in institutional/sacramental terms.
+3. **Reformation paradigm** — mission theology reshaped by the Reformers' recovered emphasis on Scripture, grace, and the priesthood of all believers, though the Reformers themselves were often slower than later evangelicals to organize cross-cultural mission structures.
+4. **Enlightenment paradigm** — the rise of the modern missionary movement (18th-19th centuries), shaped by both genuine revival (the Evangelical Awakenings) and by the Enlightenment's confidence in reason, progress, and (problematically) Western civilizational superiority — a tension mission historians still wrestle with.
+5. **Ecumenical and evangelical paradigms of the 20th-21st century** — a fragmenting and re-forming of mission theology after the World Wars and decolonization, including the ecumenical movement's turn toward missio Dei language (file 01) and holistic mission, and the evangelical movement's parallel turn toward frontier/unreached-peoples strategy (Lausanne, the Winter/Latourette line) and its own internal debates about the relationship between evangelism and social action (file 04).
+
+## Why "paradigm shift" language matters
+Calling these "paradigms" (borrowing Thomas Kuhn's term from the philosophy of science) makes a specific claim: each era's mission theology was not simply "more mission theology added on" to the last, but a genuinely different way of framing what mission fundamentally *is* — shaped by the theological, political, and cultural forces of its moment. This should make a contemporary missionary humble: our own era's assumptions about mission (professionalized short-term teams, church-planting metrics, unreached-people-group strategy) are themselves a paradigm, not a timeless, culture-free given — useful and often biblically grounded, but worth holding with the same critical awareness we apply to earlier eras.
+
+## Latourette's contribution
+Latourette's historical narrative (spanning "A History of the Expansion of Christianity") is often paired with Bosch's more theological account because it supplies the concrete texture — specific movements, missionaries, setbacks, and periods of advance and retreat — that keeps paradigm-level generalizations honest and grounded in what actually happened on the ground across two millennia.

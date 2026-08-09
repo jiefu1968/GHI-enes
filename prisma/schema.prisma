@@ -1,0 +1,136 @@
+// Prisma schema — Postgres replacement for the original harvest_db.py
+// SQLite file. Postgres (Vercel Postgres / Neon / Supabase) is used
+// instead of SQLite because Next.js on serverless platforms has no
+// durable local disk between invocations, and a real server can have
+// many concurrent replicas — Postgres is the shared source of truth
+// all of them talk to. Table shapes mirror the original 1:1 so the
+// mentor-dashboard semantics (roster, activity log, urgent flags,
+// mentor messages + delivery receipts, digests) are unchanged.
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Missionary {
+  id        String   @id
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Set only when a mentor logs an actual real (voice/video/in-person)
+  // conversation with this missionary — never touched by AI chat activity.
+  // Powers the "human relationship health" indicator on the mentor
+  // dashboard (see MentorDashboard.tsx), so a mentor can see at a glance
+  // who has gone quiet on real human contact, not just AI usage.
+  lastHumanContactAt DateTime? @map("last_human_contact_at")
+
+  // Free-text field context ("Central Asia, Muslim-majority, house
+  // church"), set once by the missionary, used only to rank which of
+  // the 34 modules are recommended first — see lib/recommendations.ts.
+  // Never sent to the AI as instruction, purely a client-side sort hint.
+  fieldContext String? @map("field_context")
+
+  activity      ActivityLog[]
+  urgentFlags   UrgentFlag[]
+  digests       Digest[]
+  receipts      MentorMessageReceipt[]
+  entryAssessment EntryAssessment?
+
+  @@map("missionaries")
+}
+
+// The fixed 100-question entry diagnostic (see lib/entryAssessment.ts)
+// — taken once, before the missionary starts using the multi-agent
+// system in earnest, so the mentor has a concrete picture of existing
+// theological/missiological knowledge, area by area. @unique on
+// missionaryId: retaking it overwrites the previous result (upsert),
+// rather than keeping a history — this is meant to be a one-time
+// entry snapshot, not a repeated progress-tracking quiz (that's what
+// the per-module Quiz feature is for).
+model EntryAssessment {
+  id                 Int      @id @default(autoincrement())
+  missionaryId       String   @unique @map("missionary_id")
+  foundationsScore   Int      @map("foundations_score")
+  formationScore     Int      @map("formation_score")
+  interculturalScore Int      @map("intercultural_score")
+  strategyScore      Int      @map("strategy_score")
+  evangelismScore    Int      @map("evangelism_score")
+  totalScore         Int      @map("total_score")
+  // Raw { questionId: selectedOptionIndex } map — kept for audit/review,
+  // e.g. if a mentor wants to see exactly which questions were missed.
+  answers            Json
+  completedAt        DateTime @default(now()) @map("completed_at")
+
+  missionary Missionary @relation(fields: [missionaryId], references: [id], onDelete: Cascade)
+
+  @@map("entry_assessments")
+}
+
+model ActivityLog {
+  id            Int      @id @default(autoincrement())
+  missionaryId  String   @map("missionary_id")
+  role          String
+  content       String
+  agentKey      String?  @map("agent_key")
+  module        Int?
+  timestamp     DateTime @default(now())
+
+  missionary Missionary @relation(fields: [missionaryId], references: [id], onDelete: Cascade)
+
+  @@index([missionaryId])
+  @@map("activity_log")
+}
+
+model UrgentFlag {
+  id            Int      @id @default(autoincrement())
+  missionaryId  String   @map("missionary_id")
+  message       String
+  reason        String
+  timestamp     DateTime @default(now())
+  resolved      Boolean  @default(false)
+
+  missionary Missionary @relation(fields: [missionaryId], references: [id], onDelete: Cascade)
+
+  @@index([missionaryId, resolved])
+  @@map("urgent_flags")
+}
+
+// missionaryId = null broadcasts to every missionary in the roster.
+model MentorMessage {
+  id           Int      @id @default(autoincrement())
+  missionaryId String?  @map("missionary_id")
+  content      String
+  timestamp    DateTime @default(now())
+
+  receipts MentorMessageReceipt[]
+
+  @@map("mentor_messages")
+}
+
+model MentorMessageReceipt {
+  messageId    Int      @map("message_id")
+  missionaryId String   @map("missionary_id")
+  deliveredAt  DateTime @default(now()) @map("delivered_at")
+
+  message    MentorMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  missionary Missionary    @relation(fields: [missionaryId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, missionaryId])
+  @@map("mentor_message_receipts")
+}
+
+model Digest {
+  id           Int      @id @default(autoincrement())
+  missionaryId String   @map("missionary_id")
+  summary      String
+  generatedAt  DateTime @default(now()) @map("generated_at")
+
+  missionary Missionary @relation(fields: [missionaryId], references: [id], onDelete: Cascade)
+
+  @@index([missionaryId])
+  @@map("digests")
+}

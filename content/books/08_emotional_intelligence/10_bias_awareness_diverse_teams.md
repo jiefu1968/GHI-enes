@@ -1,0 +1,17 @@
+# Emotional Intelligence, Bias Awareness, and Leading Diverse Teams
+
+Leading or working within a diverse, multicultural team (the normal condition of most mission teams) puts an additional demand on self-awareness specifically: becoming honestly aware of one's own biases and "hot buttons," not just one's emotions in general. This idea is sometimes formalized as **Affirmative Introspection** — a deliberate, non-judgmental self-examination aimed specifically at surfacing blind spots that affect how one treats people who are different from oneself.
+
+## What Affirmative Introspection adds to general self-awareness
+Goleman's self-awareness component (file 01) asks "what am I feeling right now?" Affirmative Introspection asks a more specific and often more uncomfortable question: "what are my own biases, assumptions, and automatic reactions toward people who are different from me — by culture, background, communication style, or role — and where did I learn them?" The "affirmative" part matters: this self-examination works best done with curiosity and self-acceptance rather than shame or denial — a leader who cannot look honestly at their own blind spots without collapsing into guilt or defensiveness will tend to avoid the examination altogether, which leaves the blind spot fully intact and operating.
+
+## Three components worth naming specifically
+- **Knowing what makes you tick** — understanding your own core values, triggers, and default reactions well enough to predict how you're likely to respond in a given situation, rather than being surprised by your own reaction after the fact.
+- **Being comfortable in your own skin** — enough security in one's own identity that encountering real difference doesn't feel like a threat requiring defensiveness.
+- **Being aware of your own biases and hot buttons** — specifically, the situations, communication styles, or types of people that reliably trigger an outsized emotional reaction, often rooted in one's own upbringing or past experience rather than the actual present situation (a manager who was raised by a highly demanding, zero-error-tolerance parent, for example, may find themselves recreating that same demanding dynamic with subordinates without recognizing where the pattern originated).
+
+## Why this matters more, not less, in cross-cultural ministry
+A missionary or team leader can hold sound theology, genuine love for the people they serve, and real cross-cultural training (Modules 26-29) and still make biased decisions — about which local leaders to trust and promote, which communication styles read as "competent" versus "unclear," or whose feedback gets taken seriously — driven by unexamined patterns rather than deliberate ill will. This connects directly to Module 28's caution about "native-speakerism" and essentializing: bias often operates precisely by feeling like ordinary, reasonable judgment rather than announcing itself as prejudice.
+
+## A practical discipline
+Genuinely diverse, multicultural teams benefit from leaders who actively invite feedback on their own blind spots (comparable to 360-degree feedback) and treat that feedback as useful information rather than a personal attack — modeling the same non-defensive self-examination for the team that Affirmative Introspection asks of the individual. This is also a natural extension of the incarnational model's posture (Module 29) of remaining a permanent learner rather than transitioning to "expert," applied specifically to one's own biases rather than only to cultural knowledge.
