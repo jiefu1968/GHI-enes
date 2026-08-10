@@ -8,11 +8,11 @@
  * but wrong reference to a quote. Prompt engineering alone did not
  * reliably fix this. This module provides an independent, factual
  * check: whenever a response mentions a recognizable Bible reference,
- * fetch the REAL verse text (Portuguese Almeida translation) and append
- * it as a clearly labeled, verified block — so the missionary always
- * has ground truth available next to whatever the model said. A free,
- * public-domain Spanish translation is not available from this API,
- * and this build shows no English anywhere — so only Portuguese is
+ * fetch the REAL verse text (King James Version — public domain
+ * English) and append it as a clearly labeled, verified block — so
+ * the missionary always has ground truth available next to whatever
+ * the model said. A free, public-domain Spanish translation is not
+ * available from this API — so only English is
  * verified — see BILINGUAL_RULE in guardrails.ts for how the Spanish
  * section is handled instead (paraphrase, not quotation).
  *
@@ -197,7 +197,7 @@ export function userRequestedVerse(userMessage: string): boolean {
 /**
  * Given a model's raw response text, find any recognizable Scripture
  * references and return a formatted, clearly-labeled block with the
- * REAL verse text fetched live from bible-api.com (Portuguese Almeida,
+ * REAL verse text fetched live from bible-api.com (King James Version,
  * public domain). A free, public-domain Spanish translation is not
  * available from this API, and this build shows no English anywhere —
  * so only the Portuguese verification is displayed; Spanish Scripture
@@ -214,17 +214,17 @@ export async function buildVerificationBlock(responseText: string): Promise<stri
   const lines: string[] = [];
   for (const ref of refs) {
     const range = ref.verseEnd ? `${ref.verseStart}-${ref.verseEnd}` : `${ref.verseStart}`;
-    const pt = await fetchVerse(ref, "almeida");
-    if (!pt) continue; // unrecognized reference or API miss — skip silently
+    const en = await fetchVerse(ref, "kjv");
+    if (!en) continue; // unrecognized reference or API miss — skip silently
     const label = `${ref.bookCode} ${ref.chapter}:${range}`;
     lines.push(`**${label}**`);
-    lines.push(`PT (Almeida): "${pt}"`);
+    lines.push(`EN (KJV): "${en}"`);
     lines.push("");
   }
   if (lines.length === 0) return "";
 
   return (
-    "\n\n---\n📖 **Escritura verificada (buscada em tempo real, domínio público — use para conferência) " +
+    "\n\n---\n📖 **Scripture verified (looked up live, public domain — use for reference) " +
     "· Escritura verificada (obtenida en tiempo real, dominio público — úsela para verificación)**\n\n" +
     lines.join("\n")
   );
