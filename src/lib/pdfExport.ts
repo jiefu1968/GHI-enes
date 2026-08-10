@@ -57,9 +57,30 @@ function delatex(text: string): string {
     .replace(/\\text\{([^}]*)\}/g, "$1");
 }
 
+// jsPDF's standard fonts only cover the WinAnsi/Latin-1 character set.
+// When a string contains even ONE character outside that set — like the
+// "typographically correct" non-breaking hyphen (U+2011) or non-breaking
+// space (U+00A0) the model sometimes writes in Bible references (e.g.
+// "3:16\u201117") — jsPDF silently switches that string to a different
+// internal encoding to represent it, which corrupts EVERY character
+// around it into garbled bytes (this is what showed up as stray "/"
+// characters and mid-word spacing breaks in exported PDFs — confirmed
+// by inspecting the raw PDF content stream byte-by-byte). The fix is to
+// normalize these "smart" typography characters to their plain ASCII
+// equivalents BEFORE the string ever reaches jsPDF, so the whole line
+// stays in the single encoding the font actually supports.
+function normalizeSpecialChars(text: string): string {
+  return text
+    .replace(/[\u2010-\u2015]/g, "-") // hyphen, non-breaking hyphen, figure/en/em dash, horizontal bar
+    .replace(/[\u00A0\u2000-\u200B\u202F\u205F]/g, " "); // non-breaking space and other Unicode spaces
+  // Curly quotes (\u2018 \u2019 \u201C \u201D) are deliberately left
+  // as-is — they ARE part of the WinAnsi charset the font supports and
+  // already render correctly, confirmed against a real exported PDF.
+}
+
 function sanitizeForPdf(text: string): string {
   if (!text) return "";
-  return delatex(text)
+  return normalizeSpecialChars(delatex(text))
     .replace(/^#{1,6}\s*/gm, "")
     .replace(/\*\*(.*?)\*\*/g, "$1")
     .replace(/\*(.*?)\*/g, "$1")
