@@ -12,13 +12,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ResponseLangMode } from "./language";
 
 // Maps this app's response-language selection to a BCP-47 tag the
-// browser's speech APIs expect. "auto" defaults to Portuguese since
+// browser's speech APIs expect. "auto" defaults to English since
 // that's this deployment's primary language (see language.ts) — there's
 // no reliable way to detect which of the two the person is about to
 // speak before they've spoken it.
 function toSpeechLang(lang: ResponseLangMode): string {
   if (lang === "es") return "es-ES";
-  return "pt-BR";
+  return "en-US";
 }
 
 // ── Voice input (microphone → text) ──
@@ -95,7 +95,7 @@ export function useSpeechSynthesis() {
   // no API key; it just requires actually choosing instead of leaving
   // the browser's own (often worst-available) default in place.
   function pickBestVoice(langTag: string): SpeechSynthesisVoice | null {
-    const prefix = langTag.split("-")[0] ?? langTag; // "pt-BR" -> "pt"
+    const prefix = langTag.split("-")[0] ?? langTag; // "en-US" -> "en"
     const candidates = voicesRef.current.filter((v) => v.lang.toLowerCase().startsWith(prefix));
     if (candidates.length === 0) return null;
     const premium = candidates.find(
