@@ -26,6 +26,10 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [attachedFile, setAttachedFile] = useState<{ name: string; text: string; truncated: boolean } | null>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeAgent, setActiveAgent] = useState("orchestrator");
   const [selectedModule, setSelectedModule] = useState<number | null>(null);
   // On phone-width screens the sidebar becomes a slide-in drawer instead
@@ -102,11 +106,23 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
   const send = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
-      if (!trimmed || streaming) return;
+      if ((!trimmed && !attachedFile) || streaming) return;
 
-      const nextHistory = [...messages, { role: "user" as const, content: trimmed }];
+      // Attachment goes in as a clearly delimited block ahead of
+      // whatever the missionary typed — visible in the chat history
+      // exactly as sent, so there's never a mismatch between what's
+      // shown and what the model actually received. An attachment with
+      // no typed question still gets a reasonable default prompt.
+      const attachmentBlock = attachedFile
+        ? `[Attached file: ${attachedFile.name}${attachedFile.truncated ? " — truncated to the first ~8,000 characters" : ""}]\n${attachedFile.text}\n[End of attached file]\n\n`
+        : "";
+      const combined = attachmentBlock + (trimmed || "Please review the attached file and share your thoughts.");
+
+      const nextHistory = [...messages, { role: "user" as const, content: combined }];
       setMessages(nextHistory);
       setInput("");
+      setAttachedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       setStreaming(true);
 
       const controller = new AbortController();
@@ -119,7 +135,7 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            message: trimmed,
+            message: combined,
             history: messages,
             selectedModule,
             selectedAgent: activeAgent,
@@ -169,8 +185,34 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
         setStreaming(false);
       }
     },
-    [messages, streaming, selectedModule, activeAgent, responseLanguage, groupModules]
+    [messages, streaming, selectedModule, activeAgent, responseLanguage, groupModules, attachedFile]
   );
+
+  const handleFileSelect = useCallback(async (file: File) => {
+    setUploadError(null);
+    setUploadingFile(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setUploadError(data?.error ?? "Could not read that file. · No se pudo leer ese archivo.");
+        return;
+      }
+      setAttachedFile({ name: file.name, text: data.text, truncated: !!data.truncated });
+    } catch {
+      setUploadError("Upload failed — check your connection and try again. · Error al subir — revisa tu conexión e intenta de nuevo.");
+    } finally {
+      setUploadingFile(false);
+    }
+  }, []);
+
+  const removeAttachedFile = useCallback(() => {
+    setAttachedFile(null);
+    setUploadError(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }, []);
 
   const identify = useCallback(async (name: string) => {
     const res = await fetch("/api/session/identify", {
@@ -389,6 +431,32 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
         {view === "chat" && (
           <>
             <MessageList messages={messages} onQuickStart={handleQuickStart} responseLanguage={responseLanguage} />
+            {(attachedFile || uploadingFile || uploadError) && (
+              <div className="flex items-center gap-2 border-t border-harvest-border bg-harvest-panel px-3 pt-3 text-xs">
+                {uploadingFile && (
+                  <span className="text-harvest-textDim">📎 Reading file… · Leyendo archivo…</span>
+                )}
+                {attachedFile && !uploadingFile && (
+                  <span className="flex items-center gap-2 rounded-lg border border-white/10 bg-harvest-panel2 px-2 py-1 text-harvest-textDim">
+                    📎 {attachedFile.name}
+                    {attachedFile.truncated && (
+                      <span className="text-harvest-gold" title="Only the first ~8,000 characters were used · Solo se usaron los primeros ~8,000 caracteres">
+                        (truncated)
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={removeAttachedFile}
+                      className="text-harvest-textDim hover:text-red-300"
+                      title="Remove attachment · Quitar archivo"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                )}
+                {uploadError && <span className="text-red-300">⚠️ {uploadError}</span>}
+              </div>
+            )}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -396,6 +464,25 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
               }}
               className="flex gap-2 border-t border-harvest-border bg-harvest-panel p-3"
             >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.docx,.txt,image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFileSelect(file);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={streaming || uploadingFile}
+                className="shrink-0 rounded-lg border border-white/10 bg-harvest-panel2 px-3 py-2 text-sm text-harvest-textDim transition hover:border-harvest-gold/50 hover:text-harvest-gold disabled:opacity-40"
+                title="Attach a PDF, Word doc, text file, or image · Adjuntar un PDF, Word, texto o imagen"
+              >
+                📎
+              </button>
               {speechRecognition.isSupported && (
                 <button
                   type="button"
@@ -423,7 +510,7 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
               />
               <button
                 type="submit"
-                disabled={streaming || !input.trim()}
+                disabled={streaming || (!input.trim() && !attachedFile)}
                 className="rounded-lg bg-harvest-goldDeep px-4 py-2 text-sm font-semibold text-harvest-bg transition hover:bg-harvest-gold disabled:opacity-40"
               >
                 {streaming ? "…" : "Send"}
