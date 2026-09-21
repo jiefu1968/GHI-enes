@@ -97,8 +97,8 @@ function Sidebar({
           [
             ["chat", "💬 Chat"],
             ["quiz", "📝 Quiz/Prueba"],
-            ["case", "📚 Caso"],
-            ["assessment", "🎯 Diagnóstico"],
+            ["case", "📚 Case/Caso"],
+            ["assessment", "🎯 Assessment/Diagnóstico"],
           ] as const
         ).map(([v, label]) => (
           <button
