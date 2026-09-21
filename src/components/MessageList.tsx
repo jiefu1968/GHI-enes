@@ -104,8 +104,8 @@ function ModuleWelcome({ moduleNum, onSend }: { moduleNum: number; onSend: (text
           Not sure what to ask? Try one of these · ¿No sabes qué preguntar? Prueba una de estas
         </p>
         {templates.map((tpl, i) => {
-          const fillEn = namePt;
-          const fillEs = nameEs || namePt;
+          const fillEn = namePt ?? `Module ${moduleNum}`;
+          const fillEs = nameEs ?? fillEn;
           const textEn = tpl.en.replace("{module}", fillEn);
           const textEs = tpl.es.replace("{module}", fillEs);
           return (
