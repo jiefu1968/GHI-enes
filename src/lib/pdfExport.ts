@@ -130,7 +130,7 @@ function ensureSpace(c: Cursor, needed: number) {
   }
 }
 
-// For short, single-purpose section labels (e.g. "Contexto", "Você").
+// For short, single-purpose section labels (e.g. "Context", "You").
 // Do NOT use this for anything that could be long/variable-length (quiz
 // questions, message content) — it does not wrap. Use paragraph() with
 // bold+color options for that instead (see wrappedHeading below).

@@ -96,7 +96,7 @@ function Sidebar({
         {(
           [
             ["chat", "💬 Chat"],
-            ["quiz", "📝 Teste/Prueba"],
+            ["quiz", "📝 Quiz/Prueba"],
             ["case", "📚 Caso"],
             ["assessment", "🎯 Diagnóstico"],
           ] as const
