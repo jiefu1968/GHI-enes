@@ -14,6 +14,7 @@ import {
   FEATURE_EXPLANATIONS,
   quickStartText,
 } from "@/lib/quickStarts";
+import { suggestionsForModule } from "@/lib/promptSuggestions";
 import { MODULE_GROUPS } from "@/lib/moduleGroups";
 import { MODULE_NAMES } from "@/lib/curriculumConfigClient";
 import { useSpeechSynthesis } from "@/lib/useSpeech";
@@ -30,10 +31,14 @@ function MessageList({
   messages,
   onQuickStart,
   responseLanguage,
+  selectedModule,
+  onSendSuggestion,
 }: {
   messages: ChatMessage[];
   onQuickStart: (label: string) => void;
   responseLanguage: ResponseLangMode;
+  selectedModule: number | null;
+  onSendSuggestion: (text: string) => void;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
   const tts = useSpeechSynthesis();
@@ -45,7 +50,12 @@ function MessageList({
   return (
     <div className="flex-1 overflow-y-auto px-4 py-6">
       <div className="mx-auto flex max-w-3xl flex-col gap-4">
-        {messages.length === 0 && <WelcomeScreen onQuickStart={onQuickStart} />}
+        {messages.length === 0 &&
+          (selectedModule !== null ? (
+            <ModuleWelcome moduleNum={selectedModule} onSend={onSendSuggestion} />
+          ) : (
+            <WelcomeScreen onQuickStart={onQuickStart} />
+          ))}
         {messages.map((m, i) => (
           <Bubble
             key={i}
@@ -60,6 +70,62 @@ function MessageList({
         ))}
         <div ref={endRef} />
       </div>
+    </div>
+  );
+}
+
+// Shown instead of the generic WelcomeScreen once a specific specialist
+// is selected but the conversation is still empty — the single most
+// common moment someone doesn't know what to ask ("I picked this
+// module... now what?"). Offers a handful of one-click example
+// questions, generated from PROMPT_SUGGESTION_TEMPLATES with this
+// module's own name filled in (see lib/promptSuggestions.ts). Clicking
+// one sends it immediately — same one-click pattern as the group cards
+// in WelcomeScreen below.
+function ModuleWelcome({ moduleNum, onSend }: { moduleNum: number; onSend: (text: string) => void }) {
+  const [namePt, nameEs] = (MODULE_NAMES[moduleNum] ?? `Module ${moduleNum}`).split(" | ");
+  const [explPt, explEs] = (MODULE_QUICK_EXPLANATIONS[moduleNum] ?? "").split(" | ");
+  const templates = suggestionsForModule(moduleNum);
+
+  return (
+    <div className="flex flex-col items-center gap-5 py-6 text-center">
+      <div>
+        <p className="text-xs uppercase tracking-wide text-harvest-textDim">
+          Module {moduleNum} · Módulo {moduleNum}
+        </p>
+        <h1 className="font-serif text-lg text-harvest-gold">{namePt}</h1>
+        {nameEs && <p className="text-sm text-harvest-textDim">{nameEs}</p>}
+        {explPt && <p className="mx-auto mt-2 max-w-md text-xs text-harvest-textDim">{explPt}</p>}
+        {explEs && <p className="mx-auto text-xs text-harvest-textDim opacity-70">{explEs}</p>}
+      </div>
+
+      <div className="flex w-full max-w-md flex-col gap-2">
+        <p className="text-left text-xs font-semibold uppercase tracking-wide text-harvest-textDim">
+          Not sure what to ask? Try one of these · ¿No sabes qué preguntar? Prueba una de estas
+        </p>
+        {templates.map((tpl, i) => {
+          const fillEn = namePt;
+          const fillEs = nameEs || namePt;
+          const textEn = tpl.en.replace("{module}", fillEn);
+          const textEs = tpl.es.replace("{module}", fillEs);
+          return (
+            <button
+              key={i}
+              onClick={() => onSend(textEn)}
+              className="rounded-lg border border-harvest-border bg-harvest-panel px-3 py-2.5 text-left text-sm transition hover:border-harvest-gold/60 hover:bg-harvest-panel2"
+            >
+              <span className="block text-harvest-text">💬 {textEn}</span>
+              <span className="block text-xs text-harvest-textDim">{textEs}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="max-w-md text-xs text-harvest-textDim">
+        Or just type your own question below, in any language.
+        <br />
+        O simplemente escribe tu propia pregunta abajo, en cualquier idioma.
+      </p>
     </div>
   );
 }
@@ -216,16 +282,8 @@ const Bubble = memo(function Bubble({
       >
         {message.content ? (
           isUser ? (
-            // User's own input is plain text they typed — never render it
-            // as markdown (no reason to interpret literal asterisks etc.
-            // they may have typed, and it avoids any injection surface).
             message.content
           ) : (
-            // Every agent's system prompt + guardrails consistently
-            // produce **bold** section headers (English/Español),
-            // bullet lists, and now the Scripture verification block —
-            // render it properly instead of showing literal markdown
-            // syntax, which is what a plain-text bubble did before.
             <div className="prose-chat">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
             </div>
@@ -248,4 +306,3 @@ const Bubble = memo(function Bubble({
     </div>
   );
 });
-

@@ -430,7 +430,13 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
 
         {view === "chat" && (
           <>
-            <MessageList messages={messages} onQuickStart={handleQuickStart} responseLanguage={responseLanguage} />
+            <MessageList
+              messages={messages}
+              onQuickStart={handleQuickStart}
+              responseLanguage={responseLanguage}
+              selectedModule={selectedModule}
+              onSendSuggestion={send}
+            />
             {(attachedFile || uploadingFile || uploadError) && (
               <div className="flex items-center gap-2 border-t border-harvest-border bg-harvest-panel px-3 pt-3 text-xs">
                 {uploadingFile && (
