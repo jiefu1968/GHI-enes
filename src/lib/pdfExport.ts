@@ -12,6 +12,19 @@
 // piece of text in this file — both our own template strings and text
 // pulled from AI-generated content (which sometimes includes emoji) —
 // goes through sanitizeForPdf() before being handed to jsPDF.
+//
+// TABLES: agent responses sometimes include a GitHub-flavored-markdown
+// table (the chat UI renders these as real <table> elements via
+// react-markdown + remark-gfm — see MessageList.tsx). Before this,
+// exportChatToPdf just ran the WHOLE message through paragraph(), which
+// dumped the raw "| cell | cell |" / "|---|---|" markdown syntax as
+// literal wrapped text — unreadable, and the actual bug a real user
+// hit exporting a table-heavy response. renderMarkdownContent() now
+// scans each message for a table block (a "|"-containing line
+// immediately followed by a separator line of only "-", ":", "|",
+// whitespace) and hands it to renderTable(), which draws an actual
+// bordered grid; every other line still goes through the normal
+// paragraph() flow, unchanged.
 
 import jsPDF from "jspdf";
 import type { ChatMessage } from "./types";
@@ -27,6 +40,8 @@ const DIM = [110, 100, 85] as const;
 const DARK = [30, 25, 18] as const;
 const GREEN = [90, 130, 70] as const;
 const RED = [170, 70, 60] as const;
+const TABLE_BORDER = [225, 218, 200] as const;
+const TABLE_HEADER_FILL = [247, 238, 218] as const; // light gold tint
 
 // Strips markdown tokens AND any character outside jsPDF's supported
 // WinAnsi range (emoji, dingbats, arrows, variation selectors) — keeps
@@ -179,10 +194,128 @@ function paragraph(c: Cursor, text: string, opts: { size?: number; color?: reado
 
 function divider(c: Cursor) {
   ensureSpace(c, 6);
-  c.doc.setDrawColor(225, 218, 200);
+  c.doc.setDrawColor(...TABLE_BORDER);
   c.doc.setLineWidth(0.2);
   c.doc.line(MARGIN, c.y, PAGE_WIDTH - MARGIN, c.y);
   c.y += 5;
+}
+
+// ── Markdown table detection + rendering ──
+// A GFM table is a "|"-containing row immediately followed by a
+// separator row of only "-", ":", "|" and whitespace, e.g.
+// "| Symptom | What it looks like |" then "|---------|-------|". Any
+// other line — including one that merely contains a "|" character for
+// some unrelated reason — is left to the normal paragraph() flow.
+function isTableSeparatorRow(line: string): boolean {
+  const t = line.trim();
+  if (!t.includes("|") || !t.includes("-")) return false;
+  return /^[\s|:-]+$/.test(t);
+}
+
+function splitTableRow(line: string): string[] {
+  let t = line.trim();
+  if (t.startsWith("|")) t = t.slice(1);
+  if (t.endsWith("|")) t = t.slice(0, -1);
+  return t.split("|").map((cell) => sanitizeForPdf(cell.trim()));
+}
+
+// Draws one row of a table (header or body) as a bordered grid, with
+// per-cell text wrapping — row height is computed from whichever cell
+// wraps to the most lines, so every cell in the row stays aligned.
+function drawTableRow(c: Cursor, cells: string[], colWidth: number, opts: { header?: boolean }) {
+  const fontSize = 8.5;
+  const cellPad = 1.8;
+  const lineHeight = fontSize * 0.42;
+
+  c.doc.setFont("helvetica", opts.header ? "bold" : "normal");
+  c.doc.setFontSize(fontSize);
+  const wrapped = cells.map((cell) => c.doc.splitTextToSize(cell, Math.max(colWidth - cellPad * 2, 10)) as string[]);
+  const maxLines = Math.max(1, ...wrapped.map((w) => w.length));
+  const rowHeight = maxLines * lineHeight + cellPad * 2;
+
+  ensureSpace(c, rowHeight + 1);
+  const rowTop = c.y;
+
+  if (opts.header) {
+    c.doc.setFillColor(...TABLE_HEADER_FILL);
+    c.doc.rect(MARGIN, rowTop, CONTENT_WIDTH, rowHeight, "F");
+  }
+
+  const textColor: readonly [number, number, number] = opts.header ? GOLD : DARK;
+  c.doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+  wrapped.forEach((cellLines, ci) => {
+    const x = MARGIN + ci * colWidth + cellPad;
+    cellLines.forEach((ln, li) => {
+      c.doc.text(ln, x, rowTop + cellPad + (li + 1) * lineHeight - 0.6);
+    });
+  });
+
+  c.doc.setDrawColor(...TABLE_BORDER);
+  c.doc.setLineWidth(0.15);
+  for (let ci = 0; ci <= cells.length; ci++) {
+    const x = MARGIN + ci * colWidth;
+    c.doc.line(x, rowTop, x, rowTop + rowHeight);
+  }
+  c.doc.line(MARGIN, rowTop, MARGIN + CONTENT_WIDTH, rowTop);
+  c.doc.line(MARGIN, rowTop + rowHeight, MARGIN + CONTENT_WIDTH, rowTop + rowHeight);
+
+  c.y = rowTop + rowHeight;
+}
+
+function renderTable(c: Cursor, headerCells: string[], bodyRows: string[][]) {
+  const numCols = headerCells.length;
+  if (numCols === 0) return;
+  const colWidth = CONTENT_WIDTH / numCols;
+  drawTableRow(c, headerCells, colWidth, { header: true });
+  for (const row of bodyRows) {
+    // Pad/truncate to the header's column count — a malformed row
+    // (model wrote one extra or missing "|") shouldn't shift columns.
+    const cells = Array.from({ length: numCols }, (_, i) => row[i] ?? "");
+    drawTableRow(c, cells, colWidth, {});
+  }
+  c.y += 3;
+}
+
+// Walks a full message body line by line: plain text is buffered and
+// flushed through the normal paragraph() renderer exactly as before;
+// a detected table block is rendered as an actual grid via
+// renderTable() instead of falling into that same paragraph() text
+// flow, which is what previously dumped raw "| cell |" / "|---|"
+// markdown syntax onto the page as literal, unreadably-wrapped text.
+function renderMarkdownContent(c: Cursor, rawText: string) {
+  if (!rawText) return;
+  const lines = rawText.split("\n");
+  let buffer: string[] = [];
+
+  function flushParagraph() {
+    if (buffer.length) {
+      paragraph(c, buffer.join("\n"));
+      buffer = [];
+    }
+  }
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i] ?? "";
+    const next = lines[i + 1];
+    if (line.includes("|") && next !== undefined && isTableSeparatorRow(next)) {
+      flushParagraph();
+      const headerCells = splitTableRow(line);
+      i += 2; // header + separator
+      const bodyRows: string[][] = [];
+      while (i < lines.length) {
+        const bodyLine = lines[i] ?? "";
+        if (!bodyLine.includes("|") || bodyLine.trim() === "") break;
+        bodyRows.push(splitTableRow(bodyLine));
+        i++;
+      }
+      renderTable(c, headerCells, bodyRows);
+      continue;
+    }
+    buffer.push(line);
+    i++;
+  }
+  flushParagraph();
 }
 
 function footer(doc: jsPDF) {
@@ -205,7 +338,7 @@ export function exportChatToPdf(messages: ChatMessage[], agentName?: string) {
   });
   for (const m of messages) {
     heading(c, m.role === "user" ? "You · Tú" : "Assistant · Asistente");
-    paragraph(c, m.content);
+    renderMarkdownContent(c, m.content);
     divider(c);
   }
   footer(c.doc);
