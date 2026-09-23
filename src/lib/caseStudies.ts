@@ -17,6 +17,7 @@ import { retrieveContext } from "./retrieval";
 import { MODULE_NAMES } from "./agents";
 import { MODULE_SEEDS } from "./caseSeeds";
 import { callWithRetry } from "./groq";
+import { offlineFallbackCase } from "./questionBank";
 import { LANGUAGE_LABELS, type GenLangMode, type ContentLanguage } from "./language";
 
 export interface CaseStudy {
@@ -273,10 +274,13 @@ export async function generateCaseStudies(
 
   if (!theCase) {
     // Last resort: both the primary and fallback-model Groq/Cerebras
-    // attempts inside generateSingleCase have failed. This build's
-    // offline fallback bank (questionBank.ts) is English-only and is
-    // not served here — mismatched with a Portuguese/Spanish-only
-    // deployment — so this rare path returns the plain error instead.
+    // attempts inside generateSingleCase have failed. Serve the
+    // hand-authored offline fallback bank (questionBank.ts, bilingual
+    // English/Spanish to match this deployment) instead of a bare
+    // error, so a missionary still gets *something* useful during a
+    // provider outage.
+    const fallback = offlineFallbackCase(moduleNum, title);
+    if (fallback) return fallback;
     const detail = error ? `\n\nDetails: ${error}` : "";
     return { error: `Could not generate the case study after retrying.${detail}` };
   }

@@ -23,6 +23,7 @@ import { retrieveContext } from "./retrieval";
 import { MODULE_NAMES } from "./agents";
 import { MODULE_SEEDS } from "./caseSeeds";
 import { callWithRetry } from "./groq";
+import { offlineFallbackQuiz } from "./questionBank";
 import { LANGUAGE_LABELS, type GenLangMode, type ContentLanguage } from "./language";
 
 export interface QuizQuestion {
@@ -234,12 +235,17 @@ export async function generateQuizQuestions(
   const result = await quizCallBatch(system, prompt, 5, 3);
   if (result.error) {
     // Last resort: both Groq and Cerebras (via callWithRetry's own
-    // internal fallback chain) are completely unreachable. This build's
-    // offline fallback bank (questionBank.ts) is English-only, and
-    // serving English on a Portuguese/Spanish-only deployment would be
-    // more confusing than helpful — so this rare path returns the plain
-    // error instead of a mismatched-language fallback question.
-    console.warn(`  ⚠️  Quiz generation failed for module ${moduleNum}; no offline fallback on this build.`);
+    // internal fallback chain) are completely unreachable. Serve the
+    // hand-authored offline fallback bank (questionBank.ts, bilingual
+    // English/Spanish to match this deployment) instead of a bare
+    // error, so a missionary still gets *something* useful during a
+    // provider outage.
+    const fallback = offlineFallbackQuiz(moduleNum, title);
+    if (fallback) {
+      console.warn(`  ⚠️  Quiz generation failed for module ${moduleNum}; serving offline fallback.`);
+      return fallback;
+    }
+    console.warn(`  ⚠️  Quiz generation failed for module ${moduleNum}; no offline fallback available for this module.`);
     return result;
   }
 
