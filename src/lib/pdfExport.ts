@@ -96,6 +96,7 @@ function normalizeSpecialChars(text: string): string {
 function sanitizeForPdf(text: string): string {
   if (!text) return "";
   return normalizeSpecialChars(delatex(text))
+    .replace(/^[ \t]*-{3,}[ \t]*$/gm, "") // markdown horizontal rule ("---" alone on its line) — a section divider, not content; drop it rather than showing it as literal dashes
     .replace(/^#{1,6}\s*/gm, "")
     .replace(/```[a-zA-Z]*\n?([\s\S]*?)```/g, "$1") // fenced code blocks — keep the code, drop the ``` fences
     .replace(/`([^`]+)`/g, "$1") // inline code — keep the text, drop the backticks
