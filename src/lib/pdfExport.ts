@@ -97,6 +97,10 @@ function sanitizeForPdf(text: string): string {
   if (!text) return "";
   return normalizeSpecialChars(delatex(text))
     .replace(/^#{1,6}\s*/gm, "")
+    .replace(/```[a-zA-Z]*\n?([\s\S]*?)```/g, "$1") // fenced code blocks — keep the code, drop the ``` fences
+    .replace(/`([^`]+)`/g, "$1") // inline code — keep the text, drop the backticks
+    .replace(/^>\s?/gm, "") // blockquote marker at line start
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // markdown links — keep the visible text, drop the (url)
     .replace(/\*\*(.*?)\*\*/g, "$1")
     .replace(/\*(.*?)\*/g, "$1")
     .replace(/^[-•]\s+/gm, "• ")
