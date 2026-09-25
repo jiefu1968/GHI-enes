@@ -30,6 +30,13 @@ interface Props {
 // reasoning. Without both halves of this fix, memo() alone would not
 // have stopped the re-render, since a "new" inline arrow function
 // prop looks identical in effect to any other changed prop.
+//
+// VISUAL NOTE: this sidebar is the one intentionally dark surface in
+// the app's otherwise light "SaaS Moderno" theme (see the design
+// exploration canvas, direction B) — it uses the dedicated
+// harvest-sidebar* tokens from tailwind.config.ts, never the
+// light-theme harvest-panel/text/border tokens the rest of the app
+// uses, so the two surfaces never accidentally bleed into each other.
 function Sidebar({
   activeAgent,
   selectedModule,
@@ -80,25 +87,27 @@ function Sidebar({
   }
 
   return (
-    <aside className="flex h-full w-80 shrink-0 flex-col overflow-y-auto border-r border-harvest-border bg-harvest-panel">
-      <div className="border-b border-harvest-border p-4">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">🌾</span>
+    <aside className="flex h-full w-80 shrink-0 flex-col overflow-y-auto bg-harvest-sidebar">
+      <div className="border-b border-harvest-sidebarBorder p-4">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-harvest-gold">
+            <span className="font-serif text-xs font-bold tracking-tight text-white">GHI</span>
+          </div>
           <div>
-            <p className="font-serif text-sm leading-tight text-harvest-gold">Global Harvest</p>
-            <p className="text-xs leading-tight text-harvest-textDim">Global Harvest Initiative</p>
+            <p className="font-serif text-sm font-semibold leading-tight text-harvest-sidebarText">Global Harvest</p>
+            <p className="text-[11px] leading-tight text-harvest-sidebarTextDim">Global Harvest Initiative</p>
           </div>
         </div>
       </div>
 
       {/* View tabs */}
-      <div className="flex flex-wrap gap-1 border-b border-harvest-border p-2">
+      <div className="flex flex-wrap gap-1 border-b border-harvest-sidebarBorder p-2">
         {(
           [
             ["chat", "💬 Chat"],
             ["quiz", "📝 Quiz/Prueba"],
             ["case", "📚 Case/Caso"],
-            ["assessment", "🎯 Assessment/Diagnóstico"],
+            ["assessment", "🎯 Assessment"],
           ] as const
         ).map(([v, label]) => (
           <button
@@ -106,7 +115,9 @@ function Sidebar({
             onClick={() => onChangeView(v)}
             className={clsx(
               "flex-1 rounded-md px-2 py-1.5 text-xs font-semibold transition",
-              view === v ? "bg-harvest-goldDeep text-harvest-bg" : "text-harvest-textDim hover:bg-harvest-panel2"
+              view === v
+                ? "bg-harvest-gold text-white"
+                : "text-harvest-sidebarTextDim hover:bg-harvest-sidebarPanel hover:text-harvest-sidebarText"
             )}
           >
             {label}
@@ -115,10 +126,10 @@ function Sidebar({
       </div>
 
       {/* Missionary identity */}
-      <div className="border-b border-harvest-border p-3">
+      <div className="border-b border-harvest-sidebarBorder p-3">
         {missionaryName ? (
-          <p className="text-xs text-harvest-textDim">
-            Tracked for mentor as <span className="text-harvest-gold">{missionaryName}</span>
+          <p className="text-xs text-harvest-sidebarTextDim">
+            Tracked for mentor as <span className="font-medium text-harvest-sidebarActiveText">{missionaryName}</span>
           </p>
         ) : (
           <form
@@ -132,13 +143,13 @@ function Sidebar({
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
               placeholder="Your name, for your mentor · Tu nombre, para tu mentor"
-              className="min-w-0 flex-1 rounded-md border border-white/10 bg-harvest-panel2 px-2 py-1 text-xs outline-none focus:border-harvest-gold"
+              className="min-w-0 flex-1 rounded-md border border-harvest-sidebarBorder bg-harvest-sidebarPanel px-2 py-1 text-xs text-harvest-sidebarText placeholder:text-harvest-sidebarTextDim outline-none focus:border-harvest-gold"
             />
             <button
               type="submit"
-              className="rounded-md bg-harvest-goldDeep px-2 py-1 text-xs font-semibold text-harvest-bg"
+              className="rounded-md bg-harvest-gold px-2 py-1 text-xs font-semibold text-white"
             >
-              Definir
+              Set
             </button>
           </form>
         )}
@@ -155,10 +166,10 @@ function Sidebar({
                   setFieldInput(fieldContext);
                   setShowFieldForm(true);
                 }}
-                className="text-left text-[11px] text-harvest-textDim hover:text-harvest-gold"
+                className="text-left text-[11px] text-harvest-sidebarTextDim hover:text-harvest-sidebarActiveText"
                 title="Click to edit"
               >
-                📍 Serving: <span className="text-harvest-text">{fieldContext}</span> (edit)
+                📍 Serving: <span className="text-harvest-sidebarText">{fieldContext}</span> (edit)
               </button>
             ) : showFieldForm || !fieldContext ? (
               <form
@@ -172,11 +183,11 @@ function Sidebar({
                   value={fieldInput}
                   onChange={(e) => setFieldInput(e.target.value)}
                   placeholder="Where are you serving? (optional)"
-                  className="min-w-0 flex-1 rounded-md border border-white/10 bg-harvest-panel2 px-2 py-1 text-[11px] outline-none focus:border-harvest-gold"
+                  className="min-w-0 flex-1 rounded-md border border-harvest-sidebarBorder bg-harvest-sidebarPanel px-2 py-1 text-[11px] text-harvest-sidebarText placeholder:text-harvest-sidebarTextDim outline-none focus:border-harvest-gold"
                 />
                 <button
                   type="submit"
-                  className="rounded-md border border-harvest-goldDeep/50 px-2 py-1 text-[11px] text-harvest-gold"
+                  className="rounded-md border border-harvest-gold/50 px-2 py-1 text-[11px] text-harvest-sidebarActiveText"
                 >
                   Save
                 </button>
@@ -196,16 +207,16 @@ function Sidebar({
           className={clsx(
             "mb-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition",
             activeAgent === "orchestrator" && !selectedModule
-              ? "bg-harvest-goldDeep/20 text-harvest-gold ring-1 ring-harvest-goldDeep/50"
-              : "text-harvest-text hover:bg-harvest-panel2"
+              ? "bg-harvest-sidebarActive text-harvest-sidebarActiveText"
+              : "text-harvest-sidebarText hover:bg-harvest-sidebarPanel"
           )}
         >
           <span>{AGENT_META.orchestrator?.emoji ?? "🌾"}</span>
           <span className="truncate">{AGENT_META.orchestrator?.name ?? "Coordinator"}</span>
         </button>
 
-        <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-harvest-textDim">
-          {moduleNums.length} Módulos
+        <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-harvest-sidebarTextDim">
+          {moduleNums.length} Modules
         </p>
 
         {/* Recommended for you — a reordering hint only (see
@@ -213,7 +224,7 @@ function Sidebar({
             in full underneath, nothing is ever hidden. */}
         {recommended.length > 0 && (
           <div className="mb-3">
-            <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-harvest-gold">
+            <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-harvest-sidebarActiveText">
               📍 Recommended for you · Recomendado para ti
             </p>
             <div className="flex flex-col gap-1">
@@ -229,7 +240,7 @@ function Sidebar({
                       onSelectModule(num);
                       onSelectAgent(key);
                     }}
-                    className="flex items-center gap-2 rounded-lg border border-harvest-goldDeep/30 bg-harvest-goldDeep/10 px-3 py-1.5 text-left text-xs text-harvest-gold transition hover:bg-harvest-goldDeep/20"
+                    className="flex items-center gap-2 rounded-lg bg-harvest-sidebarActive px-3 py-1.5 text-left text-xs text-harvest-sidebarActiveText transition hover:bg-harvest-gold/20"
                   >
                     <span>{meta?.emoji ?? "📘"}</span>
                     <span className="truncate">{num}. {nameEn}</span>
@@ -252,22 +263,20 @@ function Sidebar({
                   title={descPt}
                   className={clsx(
                     "mb-1.5 flex w-full flex-col rounded-lg px-2 py-1.5 text-left transition",
-                    isGroupActive
-                      ? "bg-harvest-goldDeep/15 ring-1 ring-harvest-goldDeep/50"
-                      : "hover:bg-harvest-panel2"
+                    isGroupActive ? "bg-harvest-sidebarActive" : "hover:bg-harvest-sidebarPanel"
                   )}
                 >
                   <span
                     className={clsx(
                       "text-[11px] font-bold uppercase tracking-wide",
-                      isGroupActive ? "text-harvest-gold" : "text-harvest-textDim"
+                      isGroupActive ? "text-harvest-sidebarActiveText" : "text-harvest-sidebarTextDim"
                     )}
                   >
                     {labelPt}
                   </span>
-                  <span className="text-[10px] font-semibold uppercase tracking-wide opacity-70">{labelEs}</span>
-                  <span className="text-[10px] text-harvest-textDim">
-                    {group.moduleNums.length} especialistas
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-harvest-sidebarTextDim opacity-70">{labelEs}</span>
+                  <span className="text-[10px] text-harvest-sidebarTextDim">
+                    {group.moduleNums.length} specialists
                     {isGroupActive && " · restricted to this group · restringido a este grupo"}
                   </span>
                 </button>
@@ -291,8 +300,8 @@ function Sidebar({
                         className={clsx(
                           "flex items-start gap-2 rounded-lg px-3 py-1.5 text-left text-xs transition",
                           isActive
-                            ? "bg-harvest-goldDeep/20 text-harvest-gold ring-1 ring-harvest-goldDeep/50"
-                            : "text-harvest-textDim hover:bg-harvest-panel2 hover:text-harvest-text"
+                            ? "bg-harvest-sidebarActive text-harvest-sidebarActiveText"
+                            : "text-harvest-sidebarTextDim hover:bg-harvest-sidebarPanel hover:text-harvest-sidebarText"
                         )}
                         title={MODULE_NAMES[num]}
                       >
@@ -315,4 +324,3 @@ function Sidebar({
 }
 
 export default memo(Sidebar);
-
