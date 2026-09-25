@@ -48,7 +48,7 @@ function MessageList({
   }, [messages]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-6">
+    <div className="flex-1 overflow-y-auto bg-harvest-bg px-4 py-6">
       <div className="mx-auto flex max-w-3xl flex-col gap-4">
         {messages.length === 0 &&
           (selectedModule !== null ? (
@@ -93,7 +93,7 @@ function ModuleWelcome({ moduleNum, onSend }: { moduleNum: number; onSend: (text
         <p className="text-xs uppercase tracking-wide text-harvest-textDim">
           Module {moduleNum} · Módulo {moduleNum}
         </p>
-        <h1 className="font-serif text-lg text-harvest-gold">{namePt}</h1>
+        <h1 className="font-serif text-lg font-semibold text-harvest-text">{namePt}</h1>
         {nameEs && <p className="text-sm text-harvest-textDim">{nameEs}</p>}
         {explPt && <p className="mx-auto mt-2 max-w-md text-xs text-harvest-textDim">{explPt}</p>}
         {explEs && <p className="mx-auto text-xs text-harvest-textDim opacity-70">{explEs}</p>}
@@ -112,7 +112,7 @@ function ModuleWelcome({ moduleNum, onSend }: { moduleNum: number; onSend: (text
             <button
               key={i}
               onClick={() => onSend(textEn)}
-              className="rounded-lg border border-harvest-border bg-harvest-panel px-3 py-2.5 text-left text-sm transition hover:border-harvest-gold/60 hover:bg-harvest-panel2"
+              className="rounded-2xl border border-harvest-border bg-harvest-panel px-4 py-3 text-left text-sm shadow-sm transition hover:border-harvest-gold/50 hover:shadow-md"
             >
               <span className="block text-harvest-text">💬 {textEn}</span>
               <span className="block text-xs text-harvest-textDim">{textEs}</span>
@@ -144,8 +144,8 @@ function WelcomeScreen({ onQuickStart }: { onQuickStart: (label: string) => void
   return (
     <div className="flex flex-col items-center gap-6 py-6 text-center">
       <div>
-        <div className="mb-2 text-4xl">🌾</div>
-        <h1 className="font-serif text-xl text-harvest-gold">Global Harvest Initiative</h1>
+        <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-harvest-gold"><span className="font-serif text-lg font-bold tracking-tight text-white">GHI</span></div>
+        <h1 className="font-serif text-xl font-semibold text-harvest-text">Global Harvest Initiative</h1>
         <p className="mt-1 text-sm text-harvest-textDim">
           Pick a card below, one of the 37 modules in the sidebar, or just ask a question.
           <br />
@@ -167,8 +167,8 @@ function WelcomeScreen({ onQuickStart }: { onQuickStart: (label: string) => void
             <div
               key={label}
               className={clsx(
-                "flex flex-col rounded-xl border text-left transition",
-                isOpen ? "border-harvest-gold/60 bg-harvest-panel2 sm:col-span-2" : "border-harvest-border bg-harvest-panel hover:border-harvest-gold/60 hover:bg-harvest-panel2"
+                "flex flex-col rounded-2xl border text-left shadow-sm transition",
+                isOpen ? "border-harvest-gold/50 bg-harvest-panel2 sm:col-span-2" : "border-harvest-border bg-harvest-panel hover:border-harvest-gold/50 hover:bg-harvest-panel2"
               )}
             >
               <button
@@ -195,7 +195,7 @@ function WelcomeScreen({ onQuickStart }: { onQuickStart: (label: string) => void
                         const [explPt, explEs] = (MODULE_QUICK_EXPLANATIONS[num] ?? "").split(" | ");
                         return (
                           <li key={num} className="text-sm">
-                            <span className="font-semibold text-harvest-gold">{num}. {namePt}</span>
+                            <span className="font-semibold text-harvest-goldDeep">{num}. {namePt}</span>
                             {nameEs && <span className="text-xs text-harvest-textDim"> · {nameEs}</span>}
                             <p className="text-xs text-harvest-textDim">{explPt}</p>
                             {explEs && <p className="text-xs text-harvest-textDim opacity-70">{explEs}</p>}
@@ -215,15 +215,15 @@ function WelcomeScreen({ onQuickStart }: { onQuickStart: (label: string) => void
                   )}
                   {group && (
                     <p className="mb-3 text-xs text-harvest-textDim">
-                      💡 Ao entrar no chat, escolha uma das {group.moduleNums.length} especialidades acima na barra
-                      lateral para conversar com ela diretamente. · Al entrar al chat, elige una de las{" "}
+                      💡 Once in chat, choose one of the {group.moduleNums.length} specialists above in the sidebar
+                      to talk to them directly. · Al entrar al chat, elige una de las{" "}
                       {group.moduleNums.length} especialidades arriba en la barra lateral para hablar directamente
                       con ella.
                     </p>
                   )}
                   <button
                     onClick={() => onQuickStart(label)}
-                    className="rounded-lg bg-harvest-goldDeep px-3 py-1.5 text-xs font-semibold text-harvest-bg transition hover:bg-harvest-gold"
+                    className="rounded-full bg-harvest-gold px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-harvest-goldDeep"
                   >
                     Start · Comenzar
                   </button>
@@ -250,6 +250,12 @@ export default memo(MessageList);
 // from scratch, even for old messages that never changed — the actual
 // mechanism behind the reported input lag, worse the longer a
 // conversation gets.
+//
+// VISUAL NOTE: asymmetric corner radii (sharp on the "pointing" corner)
+// plus a solid indigo fill for the user's own bubble, and a plain white
+// card with a soft shadow (not a border) for the assistant's — this is
+// the SaaS-Moderno chat-bubble treatment from the design exploration
+// canvas, direction B.
 const Bubble = memo(function Bubble({
   id,
   message,
@@ -274,10 +280,10 @@ const Bubble = memo(function Bubble({
     <div className={clsx("flex", isUser ? "justify-end" : "justify-start")}>
       <div
         className={clsx(
-          "max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
+          "max-w-[85%] px-4 py-3 text-sm leading-relaxed",
           isUser
-            ? "whitespace-pre-wrap bg-harvest-goldDeep/90 text-harvest-bg"
-            : "border border-harvest-border bg-harvest-panel text-harvest-text"
+            ? "whitespace-pre-wrap rounded-[18px] rounded-br-[4px] bg-harvest-gold text-white"
+            : "rounded-[18px] rounded-bl-[4px] bg-harvest-panel text-harvest-text shadow-sm"
         )}
       >
         {message.content ? (
@@ -296,7 +302,7 @@ const Bubble = memo(function Bubble({
             onClick={() =>
               isSpeakingThis ? onStopSpeak() : onSpeak(id, message.content, responseLanguage)
             }
-            className="mt-2 rounded-md border border-white/10 px-2 py-1 text-xs text-harvest-textDim transition hover:border-harvest-gold/50 hover:text-harvest-gold"
+            className="mt-2 rounded-full border border-harvest-border px-2.5 py-1 text-xs text-harvest-textDim transition hover:border-harvest-gold/50 hover:text-harvest-gold"
             title="Listen to this response · Escuchar esta respuesta"
           >
             {isSpeakingThis ? "⏹ Stop · Detener" : "🔊 Listen · Escuchar"}
