@@ -59,7 +59,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={loading || !code}
-          className="w-full rounded-lg bg-harvest-goldDeep px-4 py-2 font-semibold text-harvest-bg transition hover:bg-harvest-gold disabled:opacity-40"
+          className="w-full rounded-lg bg-harvest-goldDeep px-4 py-2 font-semibold text-white transition hover:bg-harvest-gold disabled:opacity-40"
         >
           {loading ? "Checking…" : "Sign in"}
         </button>

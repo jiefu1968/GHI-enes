@@ -128,7 +128,7 @@ export default function CaseStudyPanel({ selectedModule }: { selectedModule: num
           <button
             onClick={generate}
             disabled={loading}
-            className="rounded-lg bg-harvest-goldDeep px-4 py-2 text-sm font-semibold text-harvest-bg transition hover:bg-harvest-gold disabled:opacity-40"
+            className="rounded-lg bg-harvest-goldDeep px-4 py-2 text-sm font-semibold text-white transition hover:bg-harvest-gold disabled:opacity-40"
           >
             {loading ? "Writing… · Escribiendo…" : "Generate case study · Generar estudio de caso"}
           </button>

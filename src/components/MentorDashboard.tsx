@@ -179,7 +179,7 @@ export default function MentorDashboard() {
           />
           <button
             onClick={sendBroadcast}
-            className="w-full rounded-lg bg-harvest-goldDeep px-3 py-2 text-sm font-semibold text-harvest-bg hover:bg-harvest-gold"
+            className="w-full rounded-lg bg-harvest-goldDeep px-3 py-2 text-sm font-semibold text-white hover:bg-harvest-gold"
           >
             Send · Enviar
           </button>
@@ -219,7 +219,7 @@ export default function MentorDashboard() {
               />
               <button
                 onClick={sendDirect}
-                className="w-full rounded-lg bg-harvest-goldDeep px-3 py-2 text-sm font-semibold text-harvest-bg hover:bg-harvest-gold"
+                className="w-full rounded-lg bg-harvest-goldDeep px-3 py-2 text-sm font-semibold text-white hover:bg-harvest-gold"
               >
                 Send
               </button>

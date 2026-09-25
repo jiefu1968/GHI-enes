@@ -221,7 +221,7 @@ export default function AssessmentPanel() {
                 onClick={() => setPageIndex(i)}
                 className={clsx(
                   "rounded-md px-2.5 py-1 text-xs font-semibold transition",
-                  i === pageIndex ? "bg-harvest-goldDeep text-harvest-bg" : "bg-harvest-panel2 text-harvest-textDim hover:text-harvest-text"
+                  i === pageIndex ? "bg-harvest-goldDeep text-white" : "bg-harvest-panel2 text-harvest-textDim hover:text-harvest-text"
                 )}
               >
                 {i + 1}. {answeredCount}/{count} {checked ? `· ${checked.score}/${checked.total} ✓` : ""}
@@ -330,7 +330,7 @@ export default function AssessmentPanel() {
           {!isLastPage ? (
             <button
               onClick={() => setPageIndex((p) => Math.min(AREA_ORDER.length - 1, p + 1))}
-              className="rounded-lg bg-harvest-goldDeep px-4 py-2 text-sm font-semibold text-harvest-bg transition hover:bg-harvest-gold"
+              className="rounded-lg bg-harvest-goldDeep px-4 py-2 text-sm font-semibold text-white transition hover:bg-harvest-gold"
             >
               Next area · Área siguiente →
             </button>
@@ -338,7 +338,7 @@ export default function AssessmentPanel() {
             <button
               onClick={handleSubmit}
               disabled={submitting}
-              className="rounded-lg bg-harvest-goldDeep px-4 py-2 text-sm font-semibold text-harvest-bg transition hover:bg-harvest-gold disabled:opacity-40"
+              className="rounded-lg bg-harvest-goldDeep px-4 py-2 text-sm font-semibold text-white transition hover:bg-harvest-gold disabled:opacity-40"
             >
               {submitting ? "Submitting… · Enviando…" : `Submit (${totalAnswered}/100 answered) · Enviar (${totalAnswered}/100 respondidas)`}
             </button>
