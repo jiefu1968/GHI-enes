@@ -16,8 +16,6 @@ interface BiList {
   secondary?: string[];
 }
 
-// In "all" (default) mode we show Portuguese + Spanish side by side. In
-// a single selected language, only that language's field is populated.
 function textFields(theCase: CaseStudy, base: string, lang: GenLangMode): BiText {
   if (lang === "all") {
     return {
@@ -38,10 +36,6 @@ function listFields(theCase: CaseStudy, base: string, lang: GenLangMode): BiList
   return { primary: (theCase as any)[`${base}_${lang}`] };
 }
 
-// Concatenates every section into one block of plain text for the
-// "Ouvir" (listen) button — reads only the primary (first-shown)
-// language, same as a person reading top-to-bottom would encounter,
-// rather than doubling up both languages in one continuous narration.
 function caseToSpeechText(theCase: CaseStudy, lang: GenLangMode): string {
   const parts = [
     textFields(theCase, "title", lang).primary,
@@ -81,17 +75,17 @@ export default function CaseStudyPanel({ selectedModule }: { selectedModule: num
   const title = theCase ? textFields(theCase, "title", lang) : undefined;
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-6">
+    <div className="flex-1 overflow-y-auto bg-harvest-bg px-4 py-6">
       <div className="mx-auto max-w-3xl">
-        <div className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-harvest-border bg-harvest-panel p-4">
+        <div className="mb-6 flex flex-wrap items-end gap-3 rounded-2xl border border-harvest-border bg-harvest-panel p-4 shadow-sm">
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-harvest-textDim">
-              Módulo · Módulo
+              Module · Módulo
             </label>
             <select
               value={module}
               onChange={(e) => setModule(Number(e.target.value))}
-              className="rounded-lg border border-white/10 bg-harvest-panel2 px-3 py-2 text-sm outline-none focus:border-harvest-gold"
+              className="rounded-lg border border-harvest-border bg-harvest-panel2 px-3 py-2 text-sm outline-none focus:border-harvest-gold"
             >
               {Object.entries(MODULE_NAMES).map(([num, name]) => (
                 <option key={num} value={num}>
@@ -102,15 +96,15 @@ export default function CaseStudyPanel({ selectedModule }: { selectedModule: num
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-harvest-textDim">
-              Idioma · Idioma
+              Language · Idioma
             </label>
             <select
               value={lang}
               onChange={(e) => setLang(e.target.value as GenLangMode)}
-              className="rounded-lg border border-white/10 bg-harvest-panel2 px-3 py-2 text-sm outline-none focus:border-harvest-gold"
+              className="rounded-lg border border-harvest-border bg-harvest-panel2 px-3 py-2 text-sm outline-none focus:border-harvest-gold"
             >
               <option value="all">English + Español (default)</option>
-              <option value="pt">{LANGUAGE_LABELS.pt} apenas</option>
+              <option value="pt">{LANGUAGE_LABELS.pt} only</option>
               <option value="es">{LANGUAGE_LABELS.es} solamente</option>
             </select>
           </div>
@@ -122,13 +116,13 @@ export default function CaseStudyPanel({ selectedModule }: { selectedModule: num
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
               placeholder="e.g. Southeast Asian Buddhist context"
-              className="w-full rounded-lg border border-white/10 bg-harvest-panel2 px-3 py-2 text-sm outline-none focus:border-harvest-gold"
+              className="w-full rounded-lg border border-harvest-border bg-harvest-panel2 px-3 py-2 text-sm outline-none focus:border-harvest-gold"
             />
           </div>
           <button
             onClick={generate}
             disabled={loading}
-            className="rounded-lg bg-harvest-goldDeep px-4 py-2 text-sm font-semibold text-white transition hover:bg-harvest-gold disabled:opacity-40"
+            className="rounded-full bg-harvest-gold px-5 py-2 text-sm font-semibold text-white transition hover:bg-harvest-goldDeep disabled:opacity-40"
           >
             {loading ? "Writing… · Escribiendo…" : "Generate case study · Generar estudio de caso"}
           </button>
@@ -141,7 +135,7 @@ export default function CaseStudyPanel({ selectedModule }: { selectedModule: num
                       ? tts.stop()
                       : tts.speak("case", caseToSpeechText(theCase, lang), lang === "all" ? "auto" : lang)
                   }
-                  className="rounded-lg border border-white/10 px-3 py-2 text-xs text-harvest-textDim transition hover:border-harvest-gold/50 hover:text-harvest-gold"
+                  className="rounded-full border border-harvest-border px-3 py-2 text-xs text-harvest-textDim transition hover:border-harvest-gold/50 hover:text-harvest-gold"
                   title="Listen to this case study · Escuchar este estudio de caso"
                 >
                   {tts.speakingId === "case" ? "⏹ Stop · Detener" : "🔊 Listen · Escuchar"}
@@ -149,31 +143,31 @@ export default function CaseStudyPanel({ selectedModule }: { selectedModule: num
               )}
               <button
                 onClick={() => result && exportCaseStudyToPdf(result, lang)}
-                className="rounded-lg border border-white/10 px-3 py-2 text-xs text-harvest-textDim transition hover:border-harvest-gold/50 hover:text-harvest-gold"
+                className="rounded-full border border-harvest-border px-3 py-2 text-xs text-harvest-textDim transition hover:border-harvest-gold/50 hover:text-harvest-gold"
                 title="Download this case study as PDF · Descargar este estudio de caso en PDF"
               >
                 📄 PDF
               </button>
               <button
                 onClick={() => setResult(null)}
-                className="rounded-lg border border-white/10 px-3 py-2 text-xs text-harvest-textDim transition hover:border-harvest-gold/50 hover:text-harvest-gold"
+                className="rounded-full border border-harvest-border px-3 py-2 text-xs text-harvest-textDim transition hover:border-harvest-gold/50 hover:text-harvest-gold"
                 title="Clear the current case study · Borra el estudio de caso actual"
               >
-                🗑️ Limpar · Limpiar
+                🗑️ Clear · Limpiar
               </button>
             </>
           )}
         </div>
 
         {result?.error && (
-          <div className="rounded-xl border border-red-900/50 bg-red-950/30 p-4 text-sm text-red-300">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             ⚠️ {result.error}
           </div>
         )}
 
         {theCase && (
-          <article className="rounded-xl border border-harvest-border bg-harvest-panel p-6">
-            <h2 className="font-serif text-lg text-harvest-gold">{title?.primary}</h2>
+          <article className="rounded-2xl border border-harvest-border bg-harvest-panel p-6 shadow-sm">
+            <h2 className="font-serif text-lg font-semibold text-harvest-text">{title?.primary}</h2>
             {title?.secondary && <p className="mb-4 text-sm text-harvest-textDim">{title.secondary}</p>}
 
             <Section label="Context" labelEs="Contexto" {...textFields(theCase, "context", lang)} />
@@ -209,7 +203,7 @@ function Section({
 }) {
   return (
     <div className="mb-5">
-      <p className="mb-1 text-xs font-bold uppercase tracking-wide text-harvest-gold">
+      <p className="mb-1 text-xs font-bold uppercase tracking-wide text-harvest-goldDeep">
         {label} · {labelEs}
       </p>
       <p className="text-sm leading-relaxed text-harvest-text">{primary}</p>
@@ -232,7 +226,7 @@ function ListSection({
   const items = primary ?? [];
   return (
     <div className="mb-5">
-      <p className="mb-1 text-xs font-bold uppercase tracking-wide text-harvest-gold">
+      <p className="mb-1 text-xs font-bold uppercase tracking-wide text-harvest-goldDeep">
         {label} · {labelEs}
       </p>
       <ul className="list-disc space-y-1 pl-5 text-sm text-harvest-text">
