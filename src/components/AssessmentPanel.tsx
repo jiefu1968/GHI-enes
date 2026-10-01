@@ -117,21 +117,21 @@ export default function AssessmentPanel() {
   }
 
   if (loading) {
-    return <div className="flex-1 p-6 text-sm text-harvest-textDim">Loading… · Cargando…</div>;
+    return <div className="flex-1 bg-harvest-bg p-6 text-sm text-harvest-textDim">Loading… · Cargando…</div>;
   }
 
   // ── Result view (already completed) ──
   if (result) {
     return (
-      <div className="flex-1 overflow-y-auto px-4 py-6">
+      <div className="flex-1 overflow-y-auto bg-harvest-bg px-4 py-6">
         <div className="mx-auto max-w-2xl">
           <div className="mb-1 flex items-center justify-between">
-            <h2 className="font-serif text-lg text-harvest-gold">
+            <h2 className="font-serif text-lg font-semibold text-harvest-text">
               Initial Assessment Result · Resultado de la Evaluación Inicial
             </h2>
             <button
               onClick={() => exportAssessmentToPdf(result)}
-              className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-harvest-textDim transition hover:border-harvest-gold/50 hover:text-harvest-gold"
+              className="rounded-full border border-harvest-border px-3 py-1.5 text-xs text-harvest-textDim transition hover:border-harvest-gold/50 hover:text-harvest-gold"
               title="Download this result as PDF · Descargar este resultado en PDF"
             >
               📄 PDF
@@ -141,7 +141,7 @@ export default function AssessmentPanel() {
             Completed on · Completada el {new Date(result.completedAt).toLocaleDateString()}
           </p>
 
-          <div className="mb-6 rounded-xl border-2 border-harvest-goldDeep bg-gradient-to-br from-harvest-panel2 to-harvest-panel p-6 text-center">
+          <div className="mb-6 rounded-2xl border border-harvest-gold/20 bg-harvest-panel p-6 text-center shadow-sm">
             <p className="text-xs uppercase tracking-wide text-harvest-textDim">Total Score · Puntuación total</p>
             <p className="mt-1 text-4xl font-bold text-harvest-gold">{result.totalScore} / 100</p>
           </div>
@@ -159,19 +159,19 @@ export default function AssessmentPanel() {
               const [labelPt, labelEs] = areaLabel(area);
               const pct = score / max;
               return (
-                <div key={area} className="rounded-lg border border-harvest-border bg-harvest-panel p-4">
+                <div key={area} className="rounded-xl border border-harvest-border bg-harvest-panel p-4 shadow-sm">
                   <div className="mb-1 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-semibold text-harvest-text">{labelPt}</p>
                       <p className="text-xs text-harvest-textDim">{labelEs}</p>
                     </div>
-                    <span className={clsx("text-sm font-bold", pct >= 0.6 ? "text-harvest-green" : "text-amber-400")}>
+                    <span className={clsx("text-sm font-bold", pct >= 0.6 ? "text-harvest-green" : "text-amber-600")}>
                       {score}/{max} {pct >= 0.6 ? "✅" : "⚠️"}
                     </span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-harvest-panel2">
                     <div
-                      className={clsx("h-full rounded-full", pct >= 0.6 ? "bg-harvest-green" : "bg-amber-400")}
+                      className={clsx("h-full rounded-full", pct >= 0.6 ? "bg-harvest-green" : "bg-amber-500")}
                       style={{ width: `${pct * 100}%` }}
                     />
                   </div>
@@ -181,8 +181,7 @@ export default function AssessmentPanel() {
           </div>
 
           <p className="mt-6 text-xs text-harvest-textDim">
-            This result is also visible to your mentor, to help decide where to start. ·
-            Este resultado también es visible para tu mentor, para ayudar a decidir por dónde empezar.
+            This result is also visible to your mentor, to help decide where to start. · Este resultado también es visible para tu mentor, para ayudar a decidir por dónde empezar.
           </p>
         </div>
       </div>
@@ -199,10 +198,10 @@ export default function AssessmentPanel() {
   const currentCheck = areaChecks[currentArea];
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-6">
+    <div className="flex-1 overflow-y-auto bg-harvest-bg px-4 py-6">
       <div className="mx-auto max-w-2xl">
         <div className="mb-4">
-          <h2 className="font-serif text-lg text-harvest-gold">Initial Assessment · Evaluación Inicial</h2>
+          <h2 className="font-serif text-lg font-semibold text-harvest-text">Initial Assessment · Evaluación Inicial</h2>
           <p className="text-xs text-harvest-textDim">
             100 fixed questions, one time only, so your mentor gets to know your theological and missiological baseline. ·
             100 preguntas fijas, una única vez, para que tu mentor conozca tu base teológica y misionológica.
@@ -220,8 +219,8 @@ export default function AssessmentPanel() {
                 key={area}
                 onClick={() => setPageIndex(i)}
                 className={clsx(
-                  "rounded-md px-2.5 py-1 text-xs font-semibold transition",
-                  i === pageIndex ? "bg-harvest-goldDeep text-white" : "bg-harvest-panel2 text-harvest-textDim hover:text-harvest-text"
+                  "rounded-full px-3 py-1.5 text-xs font-semibold transition",
+                  i === pageIndex ? "bg-harvest-gold text-white" : "bg-harvest-panel2 text-harvest-textDim hover:text-harvest-text"
                 )}
               >
                 {i + 1}. {answeredCount}/{count} {checked ? `· ${checked.score}/${checked.total} ✓` : ""}
@@ -230,13 +229,13 @@ export default function AssessmentPanel() {
           })}
         </div>
 
-        <div className="mb-4 rounded-lg border border-harvest-border bg-harvest-panel px-4 py-2">
-          <p className="text-sm font-semibold text-harvest-gold">{labelPt}</p>
+        <div className="mb-4 rounded-xl border border-harvest-border bg-harvest-panel px-4 py-3 shadow-sm">
+          <p className="text-sm font-semibold text-harvest-text">{labelPt}</p>
           <p className="text-xs text-harvest-textDim">{labelEs}</p>
         </div>
 
         {currentCheck && (
-          <div className="mb-4 rounded-lg border-2 border-harvest-goldDeep bg-harvest-goldDeep/10 px-4 py-3 text-center">
+          <div className="mb-4 rounded-xl border border-harvest-gold/30 bg-harvest-gold/5 px-4 py-3 text-center">
             <p className="text-xs uppercase tracking-wide text-harvest-textDim">This part's score · Puntuación de esta parte</p>
             <p className="mt-0.5 text-2xl font-bold text-harvest-gold">{currentCheck.score} / {currentCheck.total}</p>
           </div>
@@ -247,8 +246,8 @@ export default function AssessmentPanel() {
             const questionCheck = currentCheck?.byQuestionId[q.id];
             const selected = answers[q.id];
             return (
-              <div key={q.id} className="rounded-xl border border-harvest-border bg-harvest-panel p-5">
-                <span className="rounded-full border border-harvest-goldDeep/40 bg-harvest-goldDeep/15 px-2.5 py-0.5 text-xs font-bold tracking-wide text-harvest-gold">
+              <div key={q.id} className="rounded-2xl border border-harvest-border bg-harvest-panel p-5 shadow-sm">
+                <span className="rounded-full bg-harvest-gold/10 px-2.5 py-0.5 text-xs font-bold tracking-wide text-harvest-goldDeep">
                   {qi + 1}/{areaQuestions.length}
                 </span>
                 <p className="mt-2 font-semibold text-harvest-text">{q.question_pt}</p>
@@ -256,11 +255,6 @@ export default function AssessmentPanel() {
 
                 <div className="mt-3 flex flex-col gap-2">
                   {q.options_pt.map((optPt, oi) => {
-                    // Once this area has been checked, color every option:
-                    // the actual correct one green, and — if different — the
-                    // person's own wrong pick red. Before checking, only the
-                    // plain "selected" highlight applies (no colors, since
-                    // the correct answer isn't known to the client yet).
                     const isCorrectOption = questionCheck && oi === questionCheck.correct;
                     const isWrongSelected = questionCheck && !questionCheck.isCorrect && oi === selected;
                     return (
@@ -269,25 +263,25 @@ export default function AssessmentPanel() {
                         onClick={() => !questionCheck && setAnswers((prev) => ({ ...prev, [q.id]: oi }))}
                         disabled={!!questionCheck}
                         className={clsx(
-                          "flex items-start gap-2 rounded-lg border px-3 py-2 text-left text-sm transition",
+                          "flex items-start gap-2 rounded-xl border px-3 py-2 text-left text-sm transition",
                           isCorrectOption
-                            ? "border-harvest-green bg-harvest-green/15 text-harvest-text"
+                            ? "border-green-300 bg-green-50 text-green-800"
                             : isWrongSelected
-                            ? "border-red-500 bg-red-950/30 text-harvest-text"
+                            ? "border-red-300 bg-red-50 text-red-700"
                             : selected === oi
-                            ? "border-harvest-goldDeep bg-harvest-goldDeep/15 text-harvest-text"
-                            : "border-white/10 bg-harvest-panel2 text-harvest-text hover:border-harvest-goldDeep/40",
+                            ? "border-harvest-gold bg-harvest-gold/10 text-harvest-goldDeep"
+                            : "border-harvest-border bg-harvest-panel2 text-harvest-text hover:border-harvest-gold/40",
                           questionCheck && "cursor-default opacity-90"
                         )}
                       >
                         <span
                           className={clsx(
-                            "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs font-bold",
+                            "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold",
                             isCorrectOption
-                              ? "border-harvest-green bg-harvest-green/20 text-harvest-green"
+                              ? "bg-green-200 text-green-800"
                               : isWrongSelected
-                              ? "border-red-500 bg-red-950/40 text-red-300"
-                              : "border-harvest-goldDeep/50 bg-harvest-goldDeep/20 text-harvest-gold"
+                              ? "bg-red-200 text-red-700"
+                              : "bg-harvest-gold/15 text-harvest-goldDeep"
                           )}
                         >
                           {String.fromCharCode(97 + oi)}
@@ -296,8 +290,8 @@ export default function AssessmentPanel() {
                           <span>{optPt}</span>
                           <span className="text-xs opacity-70">{q.options_es[oi]}</span>
                         </span>
-                        {isCorrectOption && <span className="ml-auto text-harvest-green">✓</span>}
-                        {isWrongSelected && <span className="ml-auto text-red-400">✕</span>}
+                        {isCorrectOption && <span className="ml-auto text-green-700">✓</span>}
+                        {isWrongSelected && <span className="ml-auto text-red-600">✕</span>}
                       </button>
                     );
                   })}
@@ -311,18 +305,18 @@ export default function AssessmentPanel() {
           <button
             onClick={() => handleCheckArea(currentArea)}
             disabled={checking || answeredInArea === 0}
-            className="mt-4 w-full rounded-lg border-2 border-harvest-goldDeep px-4 py-2.5 text-sm font-semibold text-harvest-gold transition hover:bg-harvest-goldDeep/15 disabled:opacity-40"
+            className="mt-4 w-full rounded-xl border border-harvest-gold bg-harvest-gold/5 px-4 py-2.5 text-sm font-semibold text-harvest-goldDeep transition hover:bg-harvest-gold/15 disabled:opacity-40"
           >
             {checking ? "Checking… · Verificando…" : "✓ Check my answers for this part · Verificar mis respuestas de esta parte"}
           </button>
         )}
-        {checkError && <p className="mt-2 text-sm text-red-400">{checkError}</p>}
+        {checkError && <p className="mt-2 text-sm text-red-600">{checkError}</p>}
 
         <div className="mt-5 flex items-center justify-between">
           <button
             onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
             disabled={pageIndex === 0}
-            className="rounded-lg border border-white/10 px-4 py-2 text-sm text-harvest-textDim transition hover:border-harvest-gold/50 disabled:opacity-30"
+            className="rounded-full border border-harvest-border px-4 py-2 text-sm text-harvest-textDim transition hover:border-harvest-gold/50 disabled:opacity-30"
           >
             ← Previous · Anterior
           </button>
@@ -330,7 +324,7 @@ export default function AssessmentPanel() {
           {!isLastPage ? (
             <button
               onClick={() => setPageIndex((p) => Math.min(AREA_ORDER.length - 1, p + 1))}
-              className="rounded-lg bg-harvest-goldDeep px-4 py-2 text-sm font-semibold text-white transition hover:bg-harvest-gold"
+              className="rounded-full bg-harvest-gold px-5 py-2 text-sm font-semibold text-white transition hover:bg-harvest-goldDeep"
             >
               Next area · Área siguiente →
             </button>
@@ -338,16 +332,16 @@ export default function AssessmentPanel() {
             <button
               onClick={handleSubmit}
               disabled={submitting}
-              className="rounded-lg bg-harvest-goldDeep px-4 py-2 text-sm font-semibold text-white transition hover:bg-harvest-gold disabled:opacity-40"
+              className="rounded-full bg-harvest-gold px-5 py-2 text-sm font-semibold text-white transition hover:bg-harvest-goldDeep disabled:opacity-40"
             >
               {submitting ? "Submitting… · Enviando…" : `Submit (${totalAnswered}/100 answered) · Enviar (${totalAnswered}/100 respondidas)`}
             </button>
           )}
         </div>
 
-        {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
         {isLastPage && totalAnswered < 100 && (
-          <p className="mt-3 text-xs text-amber-400">
+          <p className="mt-3 text-xs text-amber-600">
             You still have {100 - totalAnswered} unanswered questions — you can submit anyway, but they will count as wrong. ·
             Todavía faltan {100 - totalAnswered} preguntas sin responder — puedes enviar de todas formas, pero contarán como incorrectas.
           </p>
