@@ -5,6 +5,12 @@ import type { CaseStudy, CaseStudyResult } from "@/lib/caseStudies";
 import { MODULE_NAMES } from "@/lib/curriculumConfigClient";
 import { LANGUAGE_LABELS, type GenLangMode } from "@/lib/language";
 import { exportCaseStudyToPdf } from "@/lib/pdfExport";
+import CaseSimulation from "./CaseSimulation";
+import type { SimLabels } from "./CaseSimulation";
+import HistoryPanel from "./HistoryPanel";
+import type { HistoryLabels } from "./HistoryPanel";
+import { newHistoryId, saveHistoryEntry } from "@/lib/history";
+import type { HistoryEntry, HistorySummary } from "@/lib/history";
 import { useSpeechSynthesis } from "@/lib/useSpeech";
 
 interface BiText {
@@ -74,6 +80,57 @@ const TX = {
   error: "Could not translate the case. Please try again. · No se pudo traducir el caso. Inténtalo de nuevo.",
 };
 
+const SIM: SimLabels = {
+  cardTitle: "🎭 Practice this case · Practicar este caso",
+  cardText: "Role-play the scenario with an AI facilitator, get feedback, then see the recommended approach. · Haz un juego de roles del escenario con un facilitador de IA, recibe retroalimentación y luego ve el enfoque recomendado.",
+  cardButton: "Start practice · Empezar práctica",
+  title: "Case simulation · Simulación del caso",
+  back: "← Back to the case · Volver al caso",
+  scenario: "The scenario · El escenario",
+  introText: "You play the missionary; the facilitator plays everyone else in the story. Answer as you really would — there are no hints during the exercise. When you are ready, end it to get feedback and the recommended approach. · Tú haces el papel del misionero; el facilitador hace a todas las demás personas de la historia. Responde como realmente lo harías — no hay pistas durante el ejercicio. Cuando estés listo, termínalo para recibir la retroalimentación y el enfoque recomendado.",
+  langLabel: "Simulation language · Idioma de la simulación",
+  start: "Start simulation · Iniciar simulación",
+  starting: "Setting the scene… · Preparando el escenario…",
+  placeholder: "What do you say or do? · ¿Qué dices o haces?",
+  send: "Send · Enviar",
+  finish: "End and get feedback · Terminar y recibir retroalimentación",
+  finishHint: "Respond at least once to unlock this. · Responde al menos una vez para habilitarlo.",
+  finishing: "Preparing your feedback… · Preparando tu retroalimentación…",
+  limit: "You reached the limit for this simulation. End it to get your feedback. · Alcanzaste el límite de esta simulación. Termínala para recibir tu retroalimentación.",
+  error: "Something went wrong. Please try again. · Algo salió mal. Inténtalo de nuevo.",
+  retry: "Try again · Intentar de nuevo",
+  feedbackTitle: "Feedback and recommended approach · Retroalimentación y enfoque recomendado",
+  showCase: "See the full case · Ver el caso completo",
+  again: "Practice again · Practicar de nuevo",
+  confirmAgain: "Start over? The current practice will be erased. · ¿Empezar de nuevo? La práctica actual se borrará.",
+  turns: (n: number, max: number) => `Your responses: ${n}/${max} · Tus respuestas: ${n}/${max}`,
+};
+
+const HIST: HistoryLabels = {
+  title: "History · Historial",
+  note: "Saved on this device only. · Guardado solo en este dispositivo.",
+  empty: "Nothing saved yet. · Nada guardado aún.",
+  open: "Open · Abrir",
+  remove: "Delete · Eliminar",
+  clearAll: "Clear all · Borrar todo",
+  confirmClear: "Delete all saved items? · ¿Eliminar todos los elementos guardados?",
+  close: "Close · Cerrar",
+  current: "open now · abierto ahora",
+  summary: (s: HistorySummary) => `${s.revealed}/${s.total} answered, ${s.correct} correct · ${s.revealed}/${s.total} respondidas, ${s.correct} correctas`,
+};
+
+function caseTitle(c: CaseStudy | undefined, lang: string): string {
+  if (!c) return "";
+  const r = c as unknown as Record<string, unknown>;
+  const pick = (l: string) => {
+    const v = r[`title_${l}`];
+    return typeof v === "string" && v.trim() ? v.trim() : "";
+  };
+  if (lang !== "all" && pick(lang)) return pick(lang);
+  for (const k of Object.keys(r)) if (k.startsWith("title_") && pick(k.slice(6))) return pick(k.slice(6));
+  return "";
+}
+
 export default function CaseStudyPanel({
   selectedModule,
   userKey = "anon",
@@ -87,6 +144,10 @@ export default function CaseStudyPanel({
   const tts = useSpeechSynthesis();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CaseStudyResult | null>(null);
+  // Cases already generated, kept in this browser (see lib/history.ts), and the role-play view.
+  const [historyId, setHistoryId] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
+  const [simOpen, setSimOpen] = useState(false);
 
   // ── Autosave (same idea as QuizPanel) ────────────────────────────────
   // Generating a case costs an AI call; losing it by switching tabs was the
@@ -104,6 +165,7 @@ export default function CaseStudyPanel({
           if (d.lang === "all" || d.lang === "pt" || d.lang === "es") setLang(d.lang);
           if (typeof d.instructions === "string") setInstructions(d.instructions);
           setResult(d.result);
+          setHistoryId(typeof d.historyId === "string" && d.historyId ? d.historyId : newHistoryId());
           setRestored(true);
         }
       }
@@ -119,7 +181,7 @@ export default function CaseStudyPanel({
         if (result?.cases?.length) {
           window.localStorage.setItem(
             draftKey,
-            JSON.stringify({ module, lang, instructions, result, savedAt: Date.now() })
+            JSON.stringify({ module, lang, instructions, result, historyId, savedAt: Date.now() })
           );
         } else {
           window.localStorage.removeItem(draftKey);
@@ -128,7 +190,7 @@ export default function CaseStudyPanel({
         /* storage full/unavailable — non-fatal */
       }
     }
-  }, [hydrated, result, module, lang, instructions, draftKey]);
+  }, [hydrated, result, historyId, module, lang, instructions, draftKey]);
 
   // Follow the sidebar: picking a module there pre-selects it here.
   const prevSelected = useRef(selectedModule);
@@ -142,6 +204,8 @@ export default function CaseStudyPanel({
     setLoading(true);
     setResult(null);
     setRestored(false);
+    setSimOpen(false);
+    setShowHistory(false);
     const res = await fetch("/api/case-study", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -149,6 +213,7 @@ export default function CaseStudyPanel({
     });
     const data = (await res.json()) as CaseStudyResult;
     setResult(data);
+    if (data?.cases?.length) setHistoryId(newHistoryId());
     setLoading(false);
   }
 
@@ -188,6 +253,33 @@ export default function CaseStudyPanel({
     } finally {
       setTranslating(false);
     }
+  }
+
+  // ── History: every generated case is kept in this browser ──
+  useEffect(() => {
+    const c = result?.cases?.[0];
+    if (!historyId || !c) return;
+    saveHistoryEntry("case", userKey, {
+      id: historyId,
+      kind: "case",
+      module,
+      lang,
+      title: caseTitle(c, lang),
+      data: { result, instructions },
+    });
+  }, [historyId, result, module, lang, instructions, userKey]);
+
+  function openFromHistory(e: HistoryEntry) {
+    const d = e.data as { result?: CaseStudyResult; instructions?: string } | undefined;
+    if (!d || !d.result || !d.result.cases || d.result.cases.length === 0) return;
+    setModule(e.module);
+    setLang(e.lang as GenLangMode);
+    setInstructions(d.instructions ?? "");
+    setResult(d.result);
+    setHistoryId(e.id);
+    setRestored(false);
+    setSimOpen(false);
+    setShowHistory(false);
   }
 
   const theCase = result?.cases?.[0];
@@ -245,6 +337,13 @@ export default function CaseStudyPanel({
           >
             {loading ? "Writing… · Escribiendo…" : "Generate case study · Generar estudio de caso"}
           </button>
+          <button
+            onClick={() => setShowHistory((v) => !v)}
+            className="rounded-full border border-harvest-border px-3 py-2 text-xs text-harvest-textDim transition hover:border-harvest-gold/50 hover:text-harvest-gold"
+            title={HIST.title}
+          >
+            🕘 {HIST.title.split(/ [/·] /)[0]}
+          </button>
           {theCase && (
             <>
               {tts.isSupported && (
@@ -281,6 +380,18 @@ export default function CaseStudyPanel({
           )}
         </div>
 
+        {showHistory && (
+          <HistoryPanel
+            kind="case"
+            userKey={userKey}
+            labels={HIST}
+            moduleName={(n) => (MODULE_NAMES[n] ?? "").split(" | ")[0] ?? ""}
+            currentId={historyId}
+            onOpen={openFromHistory}
+            onClose={() => setShowHistory(false)}
+          />
+        )}
+
         {restored && theCase && (
           <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-harvest-gold/30 bg-harvest-gold/5 px-4 py-2 text-xs text-harvest-textDim">
             <span>
@@ -298,7 +409,7 @@ export default function CaseStudyPanel({
           </div>
         )}
 
-        {theCase && missingLangs.length > 0 && (
+        {theCase && !simOpen && missingLangs.length > 0 && (
           <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
             <p>{TX.notice(missingNames)}</p>
             <button
@@ -312,7 +423,38 @@ export default function CaseStudyPanel({
           </div>
         )}
 
-        {theCase && !(lang !== "all" && missingLangs.length > 0) && (
+        {theCase && simOpen && (
+          <CaseSimulation
+            caseData={theCase}
+            simKey={`${userKey}:${historyId || "case"}`}
+            languages={Object.entries(LANGUAGE_LABELS).map(([code, label]) => ({ code, label }))}
+            initialLang={lang !== "all" ? lang : PAIR[0] ?? "en"}
+            labels={SIM}
+            scenario={{
+              title: title?.primary,
+              context: textFields(theCase, "context", lang).primary,
+              challenge: textFields(theCase, "challenge", lang).primary,
+            }}
+            onExit={() => setSimOpen(false)}
+          />
+        )}
+
+        {theCase && !simOpen && !(lang !== "all" && missingLangs.length > 0) && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-harvest-gold/30 bg-harvest-gold/5 p-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-harvest-text">{SIM.cardTitle}</p>
+              <p className="text-xs text-harvest-textDim">{SIM.cardText}</p>
+            </div>
+            <button
+              onClick={() => setSimOpen(true)}
+              className="rounded-full bg-harvest-gold px-4 py-2 text-xs font-semibold text-white transition hover:bg-harvest-goldDeep"
+            >
+              {SIM.cardButton}
+            </button>
+          </div>
+        )}
+
+        {theCase && !simOpen && !(lang !== "all" && missingLangs.length > 0) && (
           <article className="rounded-2xl border border-harvest-border bg-harvest-panel p-6 shadow-sm">
             <h2 className="font-serif text-lg font-semibold text-harvest-text">{title?.primary}</h2>
             {title?.secondary && <p className="mb-4 text-sm text-harvest-textDim">{title.secondary}</p>}

@@ -8,6 +8,10 @@ import { LANGUAGE_LABELS, type GenLangMode } from "@/lib/language";
 import { exportQuizToPdf } from "@/lib/pdfExport";
 import { DotNav, ProgressBar, ViewToggle, useViewMode } from "./Stepper";
 import type { DotItem, DotStatus } from "./Stepper";
+import HistoryPanel from "./HistoryPanel";
+import type { HistoryLabels } from "./HistoryPanel";
+import { newHistoryId, saveHistoryEntry } from "@/lib/history";
+import type { HistoryEntry, HistorySummary } from "@/lib/history";
 
 const LETTERS = ["a", "b", "c", "d", "e"] as const;
 
@@ -44,6 +48,19 @@ function explanationText(q: QuizQuestion, lang: GenLangMode, field: "why_correct
   return { primary: q[`${field}_${lang}` as keyof QuizQuestion] as unknown as string };
 }
 
+const HIST: HistoryLabels = {
+  title: "History · Historial",
+  note: "Saved on this device only. · Guardado solo en este dispositivo.",
+  empty: "Nothing saved yet. · Nada guardado aún.",
+  open: "Open · Abrir",
+  remove: "Delete · Eliminar",
+  clearAll: "Clear all · Borrar todo",
+  confirmClear: "Delete all saved items? · ¿Eliminar todos los elementos guardados?",
+  close: "Close · Cerrar",
+  current: "open now · abierto ahora",
+  summary: (s: HistorySummary) => `${s.revealed}/${s.total} answered, ${s.correct} correct · ${s.revealed}/${s.total} respondidas, ${s.correct} correctas`,
+};
+
 export default function QuizPanel({
   selectedModule,
   userKey = "anon",
@@ -58,6 +75,9 @@ export default function QuizPanel({
   const [result, setResult] = useState<QuizResult | null>(null);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [revealed, setRevealed] = useState<Record<number, boolean>>({});
+  // Quizzes already generated, kept in this browser (see lib/history.ts).
+  const [historyId, setHistoryId] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
 
   // ── Autosave ─────────────────────────────────────────────────────────
   // Leaving this tab (or the page) used to throw the whole quiz away. The
@@ -78,6 +98,7 @@ export default function QuizPanel({
           setResult(d.result);
           setAnswers(d.answers ?? {});
           setRevealed(d.revealed ?? {});
+          setHistoryId(typeof d.historyId === "string" && d.historyId ? d.historyId : newHistoryId());
           setRestored(true);
         }
       }
@@ -93,7 +114,7 @@ export default function QuizPanel({
         if (result?.questions?.length) {
           window.localStorage.setItem(
             draftKey,
-            JSON.stringify({ module, lang, instructions, result, answers, revealed, savedAt: Date.now() })
+            JSON.stringify({ module, lang, instructions, result, answers, revealed, historyId, savedAt: Date.now() })
           );
         } else {
           window.localStorage.removeItem(draftKey);
@@ -102,7 +123,7 @@ export default function QuizPanel({
         /* storage full/unavailable — non-fatal */
       }
     }
-  }, [hydrated, result, answers, revealed, module, lang, instructions, draftKey]);
+  }, [hydrated, result, answers, revealed, historyId, module, lang, instructions, draftKey]);
 
   // Follow the sidebar: picking a specialist/module there pre-selects it
   // here. (Previously the menu only read the value at first render, so
@@ -122,6 +143,42 @@ export default function QuizPanel({
     if (loading) setStepIndex(0);
   }, [loading]);
 
+  // ── History: every generated quiz (and the progress on it) is kept in this browser ──
+  useEffect(() => {
+    const qs = result?.questions ?? [];
+    if (!historyId || qs.length === 0) return;
+    const correct = qs.filter((q) => revealed[q.n] && answers[q.n] === q.correct).length;
+    saveHistoryEntry("quiz", userKey, {
+      id: historyId,
+      kind: "quiz",
+      module,
+      lang,
+      title: result?.module_title ?? "",
+      summary: { correct, revealed: Object.keys(revealed).length, total: qs.length },
+      data: { result, answers, revealed, instructions },
+    });
+  }, [historyId, result, answers, revealed, module, lang, instructions, userKey]);
+
+  function openFromHistory(e: HistoryEntry) {
+    const d = e.data as
+      | { result?: QuizResult; answers?: Record<number, string>; revealed?: Record<number, boolean>; instructions?: string }
+      | undefined;
+    const qs = d?.result?.questions;
+    if (!d || !d.result || !qs || qs.length === 0) return;
+    const rev = d.revealed ?? {};
+    setModule(e.module);
+    setLang(e.lang as GenLangMode);
+    setInstructions(d.instructions ?? "");
+    setResult(d.result);
+    setAnswers(d.answers ?? {});
+    setRevealed(rev);
+    setHistoryId(e.id);
+    setRestored(false);
+    setShowHistory(false);
+    const idx = qs.findIndex((q) => !rev[q.n]);
+    setStepIndex(idx === -1 ? 0 : idx);
+  }
+
   const prevSelected = useRef(selectedModule);
   useEffect(() => {
     if (prevSelected.current === selectedModule) return;
@@ -133,6 +190,7 @@ export default function QuizPanel({
     setLoading(true);
     setResult(null);
     setRestored(false);
+    setShowHistory(false);
     setAnswers({});
     setRevealed({});
     const res = await fetch("/api/quiz", {
@@ -142,6 +200,7 @@ export default function QuizPanel({
     });
     const data = (await res.json()) as QuizResult;
     setResult(data);
+    if (data?.questions?.length) setHistoryId(newHistoryId());
     setLoading(false);
   }
 
@@ -219,6 +278,13 @@ export default function QuizPanel({
           >
             {loading ? "Generating… · Generando…" : "Generate quiz · Generar prueba"}
           </button>
+          <button
+            onClick={() => setShowHistory((v) => !v)}
+            className="rounded-full border border-harvest-border px-3 py-2 text-xs text-harvest-textDim transition hover:border-harvest-gold/50 hover:text-harvest-gold"
+            title={HIST.title}
+          >
+            🕘 {HIST.title.split(/ [/·] /)[0]}
+          </button>
           {questions.length > 0 && (
             <>
               <button
@@ -243,6 +309,18 @@ export default function QuizPanel({
             </>
           )}
         </div>
+
+        {showHistory && (
+          <HistoryPanel
+            kind="quiz"
+            userKey={userKey}
+            labels={HIST}
+            moduleName={(n) => (MODULE_NAMES[n] ?? "").split(" | ")[0] ?? ""}
+            currentId={historyId}
+            onOpen={openFromHistory}
+            onClose={() => setShowHistory(false)}
+          />
+        )}
 
         {restored && questions.length > 0 && (
           <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-harvest-gold/30 bg-harvest-gold/5 px-4 py-2 text-xs text-harvest-textDim">
