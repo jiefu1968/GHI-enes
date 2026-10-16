@@ -9,20 +9,26 @@ import QuizPanel from "./QuizPanel";
 import CaseStudyPanel from "./CaseStudyPanel";
 import AssessmentPanel from "./AssessmentPanel";
 import { AGENT_META } from "@/lib/agentsMeta";
-import { quickStartText, QUICK_START_VIEW, QUICK_START_GROUP_ID, STATIC_WELCOME_MESSAGE } from "@/lib/quickStarts";
+import { QUICK_START_VIEW, QUICK_START_GROUP_ID, STATIC_WELCOME_MESSAGE } from "@/lib/quickStarts";
 import { MODULE_GROUPS } from "@/lib/moduleGroups";
 import type { ChatMessage } from "@/lib/types";
 import { LANGUAGE_LABELS, type ResponseLangMode } from "@/lib/language";
 import { exportChatToPdf } from "@/lib/pdfExport";
 import { useSpeechRecognition } from "@/lib/useSpeech";
+import { isLocalMessage, makeIntroMessage, stripLocalMessages } from "@/lib/chatLocal";
+import type { IntroTarget } from "@/lib/chatLocal";
 
 interface Props {
   missionaryName: string | null;
   missionaryId: string | null;
 }
 
-export default function ChatApp({ missionaryName: initialName }: Props) {
+export default function ChatApp({ missionaryName: initialName, missionaryId }: Props) {
   const router = useRouter();
+  // Owner of locally-saved drafts (assessment answers, last quiz/case). Uses
+  // the props rather than live state so the key never changes mid-session
+  // (e.g. when the person types their name in the sidebar).
+  const draftOwner = missionaryId ?? initialName ?? "anon";
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -32,9 +38,16 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeAgent, setActiveAgent] = useState("orchestrator");
   const [selectedModule, setSelectedModule] = useState<number | null>(null);
+  // On phone-width screens the sidebar becomes a slide-in drawer instead
+  // of a permanent side-by-side column — see the layout below.
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  // When set, free-text questions sent to the orchestrator are restricted
+  // to this sidebar group's modules (see lib/moduleGroups.ts).
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [groupModules, setGroupModules] = useState<number[] | null>(null);
+  // Separate from `activeAgent` on purpose: `activeAgent` drives what
+  // gets SENT as `selectedAgent` on the next request. `lastAgentKey` is
+  // purely a display of who ACTUALLY answered (X-Agent-Key header).
   const [lastAgentKey, setLastAgentKey] = useState<string | null>(null);
   const [missionaryName, setMissionaryName] = useState(initialName);
   const [view, setView] = useState<"chat" | "quiz" | "case" | "assessment">("chat");
@@ -54,6 +67,39 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
   }, [responseLanguage]);
   const abortRef = useRef<AbortController | null>(null);
 
+  // ── "Now talking to…" feedback ─────────────────────────────────────────
+  // Clicking a specialist while a conversation is already under way used to
+  // change nothing visible. Now a small local card confirms who is on the
+  // other end and offers starter questions. With an EMPTY conversation the
+  // welcome screen already does this job (ModuleWelcome), so we stay out.
+  const messagesRef = useRef<ChatMessage[]>(messages);
+  messagesRef.current = messages;
+  const streamingRef = useRef(false);
+  streamingRef.current = streaming;
+  const prevScopeRef = useRef("-|-");
+  useEffect(() => {
+    const scope = `${selectedModule ?? "-"}|${selectedGroupId ?? "-"}`;
+    if (scope === prevScopeRef.current) return;
+    prevScopeRef.current = scope;
+    if (view !== "chat") return;
+    // Never inject while an answer is streaming: the stream writes into the
+    // LAST message, so an inserted card would be overwritten by it.
+    if (streamingRef.current) return;
+    if (messagesRef.current.filter((m) => !isLocalMessage(m)).length === 0) return;
+    const target: IntroTarget =
+      selectedModule !== null
+        ? { kind: "module", moduleNum: selectedModule }
+        : selectedGroupId
+        ? { kind: "group", groupId: selectedGroupId }
+        : { kind: "coordinator" };
+    setMessages((prev) => {
+      const last = prev[prev.length - 1];
+      const base = last && isLocalMessage(last) ? prev.slice(0, -1) : prev; // replace, don't stack
+      return [...base, makeIntroMessage(target)];
+    });
+  }, [selectedModule, selectedGroupId, view]);
+
+  // Pick up any mentor broadcast/direct messages once per load.
   useEffect(() => {
     fetch("/api/mentor/messages/undelivered")
       .then((r) => r.json())
@@ -72,16 +118,24 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
       .catch(() => {});
   }, []);
 
+  // Wrapped in useCallback so this function's reference only changes
+  // when something it actually depends on changes — NOT on every
+  // keystroke of `input` (input isn't a dependency here at all).
   const send = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
       if ((!trimmed && !attachedFile) || streaming) return;
 
+      // Attachment goes in as a clearly delimited block ahead of
+      // whatever the missionary typed — visible in the chat history
+      // exactly as sent.
       const attachmentBlock = attachedFile
         ? `[Attached file: ${attachedFile.name}${attachedFile.truncated ? " — truncated to the first ~8,000 characters" : ""}]\n${attachedFile.text}\n[End of attached file]\n\n`
         : "";
       const combined = attachmentBlock + (trimmed || "Please review the attached file and share your thoughts.");
 
+      // Local UI-only lines (the "Now talking to…" card) are never history.
+      const history = stripLocalMessages(messages);
       const nextHistory = [...messages, { role: "user" as const, content: combined }];
       setMessages(nextHistory);
       setInput("");
@@ -100,7 +154,7 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             message: combined,
-            history: messages,
+            history,
             selectedModule,
             selectedAgent: activeAgent,
             responseLanguage,
@@ -119,6 +173,7 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
           return;
         }
 
+        // Truth of who actually answered, independent of what we asked for.
         setLastAgentKey(res.headers.get("X-Agent-Key"));
 
         const reader = res.body.getReader();
@@ -184,6 +239,9 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
     if (res.ok) setMissionaryName(name);
   }, []);
 
+  // A stable wrapper around send() specifically for the Sidebar's
+  // quick-start buttons. Some labels jump straight to the Quiz/Case Study
+  // tabs, some scope the chat to a sidebar group — see lib/quickStarts.ts.
   const handleQuickStart = useCallback(
     (label: string) => {
       const targetView = QUICK_START_VIEW[label];
@@ -191,10 +249,13 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
         setView(targetView);
         return;
       }
+      // "Start" is a short, fixed pitch for the platform — shown instantly,
+      // with no API call.
       if (label === "🌾 Start") {
         setMessages((prev) => [...prev, { role: "assistant", content: STATIC_WELCOME_MESSAGE }]);
         return;
       }
+      // The group cards just navigate to Chat, scoped to that group.
       const groupId = QUICK_START_GROUP_ID[label];
       if (groupId) {
         const group = MODULE_GROUPS.find((g) => g.id === groupId);
@@ -210,6 +271,7 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
     []
   );
 
+  // Resets everything back to the initial welcome-screen state.
   const goHome = useCallback(() => {
     setView("chat");
     setMessages([]);
@@ -219,6 +281,8 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
     setGroupModules(null);
   }, []);
 
+  // Picking a specific module or the bare orchestrator overrides/clears
+  // any active group scope.
   const handleSelectAgent = useCallback((key: string) => {
     setActiveAgent(key);
     setSelectedGroupId(null);
@@ -231,6 +295,8 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
       setGroupModules(null);
     }
   }, []);
+  // Clicking a sidebar group header: free-text questions to the
+  // orchestrator are now restricted to that group's specialists.
   const handleSelectGroup = useCallback(
     (groupId: string, moduleNums: number[]) => {
       const nowActive = selectedGroupId !== groupId;
@@ -247,6 +313,8 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
     router.push("/login");
     router.refresh();
   }
+
+  const hasRealMessages = messages.some((m) => !isLocalMessage(m));
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -307,6 +375,8 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
               {view === "case" && "Case Studies · Estudios de Caso"}
               {view === "assessment" && "Initial Assessment · Diagnóstico Inicial"}
             </p>
+            {/* Truth of who last actually answered — can legitimately
+                differ from the Sidebar's selection. */}
             {view === "chat" && lastAgentKey && (
               <span className="flex max-w-[45vw] items-center gap-1 rounded-full border border-harvest-border bg-harvest-panel2 px-2 py-0.5 text-xs text-harvest-textDim md:max-w-none">
                 <span className="shrink-0">{AGENT_META[lastAgentKey]?.emoji ?? "🤖"}</span>
@@ -315,10 +385,12 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
             )}
           </div>
           <div className="flex shrink-0 items-center gap-3">
-            {view === "chat" && messages.length > 0 && (
+            {view === "chat" && hasRealMessages && (
               <>
                 <button
-                  onClick={() => exportChatToPdf(messages, lastAgentKey ? AGENT_META[lastAgentKey]?.name : undefined)}
+                  onClick={() =>
+                    exportChatToPdf(stripLocalMessages(messages), lastAgentKey ? AGENT_META[lastAgentKey]?.name : undefined)
+                  }
                   className="text-xs text-harvest-textDim hover:text-harvest-gold"
                   title="Baixar esta conversa em PDF · Descargar esta conversación en PDF"
                 >
@@ -362,6 +434,7 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
               responseLanguage={responseLanguage}
               selectedModule={selectedModule}
               onSendSuggestion={send}
+              streaming={streaming}
             />
             {(attachedFile || uploadingFile || uploadError) && (
               <div className="flex items-center gap-2 border-t border-harvest-border bg-harvest-panel px-4 pt-3 text-xs">
@@ -451,9 +524,9 @@ export default function ChatApp({ missionaryName: initialName }: Props) {
           </>
         )}
 
-        {view === "quiz" && <QuizPanel selectedModule={selectedModule} />}
-        {view === "case" && <CaseStudyPanel selectedModule={selectedModule} />}
-        {view === "assessment" && <AssessmentPanel />}
+        {view === "quiz" && <QuizPanel selectedModule={selectedModule} userKey={draftOwner} />}
+        {view === "case" && <CaseStudyPanel selectedModule={selectedModule} userKey={draftOwner} />}
+        {view === "assessment" && <AssessmentPanel userKey={draftOwner} />}
       </main>
     </div>
   );

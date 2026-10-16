@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import type { QuizResult, QuizQuestion } from "@/lib/quiz";
 import { MODULE_NAMES } from "@/lib/curriculumConfigClient";
@@ -9,6 +9,10 @@ import { exportQuizToPdf } from "@/lib/pdfExport";
 
 const LETTERS = ["a", "b", "c", "d", "e"] as const;
 
+// In "all" (default) mode, the first language (field slot "pt" — English in
+// this deployment) is the bare field (a, b, c...) and Spanish uses its _es
+// suffix — matching the schema in quiz.ts. In a single selected language,
+// only that language's field is populated.
 function optionKey(letter: string, lang: GenLangMode): keyof QuizQuestion {
   if (lang === "all" || lang === "pt") return letter as keyof QuizQuestion;
   return `${letter}_${lang}` as keyof QuizQuestion;
@@ -38,7 +42,13 @@ function explanationText(q: QuizQuestion, lang: GenLangMode, field: "why_correct
   return { primary: q[`${field}_${lang}` as keyof QuizQuestion] as unknown as string };
 }
 
-export default function QuizPanel({ selectedModule }: { selectedModule: number | null }) {
+export default function QuizPanel({
+  selectedModule,
+  userKey = "anon",
+}: {
+  selectedModule: number | null;
+  userKey?: string;
+}) {
   const [module, setModule] = useState<number>(selectedModule ?? 1);
   const [instructions, setInstructions] = useState("");
   const [lang, setLang] = useState<GenLangMode>("all");
@@ -47,9 +57,66 @@ export default function QuizPanel({ selectedModule }: { selectedModule: number |
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [revealed, setRevealed] = useState<Record<number, boolean>>({});
 
+  // ── Autosave ─────────────────────────────────────────────────────────
+  // Leaving this tab (or the page) used to throw the whole quiz away. The
+  // current quiz and the person's progress through it are now kept in this
+  // browser and restored on return. Saved only while a quiz exists.
+  const draftKey = `ghi_quiz_draft_v1:${userKey}`;
+  const [hydrated, setHydrated] = useState(false);
+  const [restored, setRestored] = useState(false);
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(draftKey);
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d?.result?.questions?.length) {
+          if (typeof d.module === "number") setModule(d.module);
+          if (d.lang === "all" || d.lang === "pt" || d.lang === "es") setLang(d.lang);
+          if (typeof d.instructions === "string") setInstructions(d.instructions);
+          setResult(d.result);
+          setAnswers(d.answers ?? {});
+          setRevealed(d.revealed ?? {});
+          setRestored(true);
+        }
+      }
+    } catch {
+      /* corrupt or unavailable storage — start fresh */
+    }
+    setHydrated(true);
+  }, [draftKey]);
+  useEffect(() => {
+    if (!hydrated) return;
+    const t = setTimeout(() => {
+      try {
+        if (result?.questions?.length) {
+          window.localStorage.setItem(
+            draftKey,
+            JSON.stringify({ module, lang, instructions, result, answers, revealed, savedAt: Date.now() })
+          );
+        } else {
+          window.localStorage.removeItem(draftKey);
+        }
+      } catch {
+        /* storage full/unavailable — non-fatal */
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [hydrated, result, answers, revealed, module, lang, instructions, draftKey]);
+
+  // Follow the sidebar: picking a specialist/module there pre-selects it
+  // here. (Previously the menu only read the value at first render, so
+  // clicking the sidebar looked like it did nothing.)
+  const prevSelected = useRef(selectedModule);
+  useEffect(() => {
+    if (prevSelected.current === selectedModule) return;
+    prevSelected.current = selectedModule;
+    if (selectedModule !== null) setModule(selectedModule);
+  }, [selectedModule]);
+
   async function generate() {
     setLoading(true);
     setResult(null);
+    setRestored(false);
     setAnswers({});
     setRevealed({});
     const res = await fetch("/api/quiz", {
@@ -130,6 +197,7 @@ export default function QuizPanel({ selectedModule }: { selectedModule: number |
               <button
                 onClick={() => {
                   setResult(null);
+                  setRestored(false);
                   setAnswers({});
                   setRevealed({});
                 }}
@@ -141,6 +209,17 @@ export default function QuizPanel({ selectedModule }: { selectedModule: number |
             </>
           )}
         </div>
+
+        {restored && questions.length > 0 && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-harvest-gold/30 bg-harvest-gold/5 px-4 py-2 text-xs text-harvest-textDim">
+            <span>
+              💾 We restored your last quiz. · Restauramos tu última prueba.
+            </span>
+            <button onClick={() => setRestored(false)} className="font-semibold text-harvest-goldDeep hover:underline">
+              OK
+            </button>
+          </div>
+        )}
 
         {result?.error && (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CaseStudy, CaseStudyResult } from "@/lib/caseStudies";
 import { MODULE_NAMES } from "@/lib/curriculumConfigClient";
 import { LANGUAGE_LABELS, type GenLangMode } from "@/lib/language";
@@ -16,6 +16,8 @@ interface BiList {
   secondary?: string[];
 }
 
+// In "all" (default) mode we show both languages side by side. In a single
+// selected language, only that language's field is populated.
 function textFields(theCase: CaseStudy, base: string, lang: GenLangMode): BiText {
   if (lang === "all") {
     return {
@@ -36,6 +38,8 @@ function listFields(theCase: CaseStudy, base: string, lang: GenLangMode): BiList
   return { primary: (theCase as any)[`${base}_${lang}`] };
 }
 
+// Concatenates every section into one block of plain text for the
+// "Listen" button — reads only the primary (first-shown) language.
 function caseToSpeechText(theCase: CaseStudy, lang: GenLangMode): string {
   const parts = [
     textFields(theCase, "title", lang).primary,
@@ -50,7 +54,13 @@ function caseToSpeechText(theCase: CaseStudy, lang: GenLangMode): string {
   return parts.filter(Boolean).join(". ");
 }
 
-export default function CaseStudyPanel({ selectedModule }: { selectedModule: number | null }) {
+export default function CaseStudyPanel({
+  selectedModule,
+  userKey = "anon",
+}: {
+  selectedModule: number | null;
+  userKey?: string;
+}) {
   const [module, setModule] = useState<number>(selectedModule ?? 1);
   const [instructions, setInstructions] = useState("");
   const [lang, setLang] = useState<GenLangMode>("all");
@@ -58,9 +68,61 @@ export default function CaseStudyPanel({ selectedModule }: { selectedModule: num
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CaseStudyResult | null>(null);
 
+  // ── Autosave (same idea as QuizPanel) ────────────────────────────────
+  // Generating a case costs an AI call; losing it by switching tabs was the
+  // most frustrating way to waste one.
+  const draftKey = `ghi_case_draft_v1:${userKey}`;
+  const [hydrated, setHydrated] = useState(false);
+  const [restored, setRestored] = useState(false);
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(draftKey);
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d?.result?.cases?.length) {
+          if (typeof d.module === "number") setModule(d.module);
+          if (d.lang === "all" || d.lang === "pt" || d.lang === "es") setLang(d.lang);
+          if (typeof d.instructions === "string") setInstructions(d.instructions);
+          setResult(d.result);
+          setRestored(true);
+        }
+      }
+    } catch {
+      /* corrupt or unavailable storage — start fresh */
+    }
+    setHydrated(true);
+  }, [draftKey]);
+  useEffect(() => {
+    if (!hydrated) return;
+    const t = setTimeout(() => {
+      try {
+        if (result?.cases?.length) {
+          window.localStorage.setItem(
+            draftKey,
+            JSON.stringify({ module, lang, instructions, result, savedAt: Date.now() })
+          );
+        } else {
+          window.localStorage.removeItem(draftKey);
+        }
+      } catch {
+        /* storage full/unavailable — non-fatal */
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [hydrated, result, module, lang, instructions, draftKey]);
+
+  // Follow the sidebar: picking a module there pre-selects it here.
+  const prevSelected = useRef(selectedModule);
+  useEffect(() => {
+    if (prevSelected.current === selectedModule) return;
+    prevSelected.current = selectedModule;
+    if (selectedModule !== null) setModule(selectedModule);
+  }, [selectedModule]);
+
   async function generate() {
     setLoading(true);
     setResult(null);
+    setRestored(false);
     const res = await fetch("/api/case-study", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -149,7 +211,10 @@ export default function CaseStudyPanel({ selectedModule }: { selectedModule: num
                 📄 PDF
               </button>
               <button
-                onClick={() => setResult(null)}
+                onClick={() => {
+                  setResult(null);
+                  setRestored(false);
+                }}
                 className="rounded-full border border-harvest-border px-3 py-2 text-xs text-harvest-textDim transition hover:border-harvest-gold/50 hover:text-harvest-gold"
                 title="Clear the current case study · Borra el estudio de caso actual"
               >
@@ -158,6 +223,17 @@ export default function CaseStudyPanel({ selectedModule }: { selectedModule: num
             </>
           )}
         </div>
+
+        {restored && theCase && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-harvest-gold/30 bg-harvest-gold/5 px-4 py-2 text-xs text-harvest-textDim">
+            <span>
+              💾 We restored your last case study. · Restauramos tu último estudio de caso.
+            </span>
+            <button onClick={() => setRestored(false)} className="font-semibold text-harvest-goldDeep hover:underline">
+              OK
+            </button>
+          </div>
+        )}
 
         {result?.error && (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">

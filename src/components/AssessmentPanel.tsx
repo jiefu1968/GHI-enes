@@ -38,15 +38,31 @@ interface AreaCheck {
   byQuestionId: Record<number, { correct: number; isCorrect: boolean }>;
 }
 
+// What is persisted in the browser while the assessment is in progress.
+interface Draft {
+  answers: Record<number, number>;
+  pageIndex: number;
+  areaChecks: Partial<Record<AssessmentArea, AreaCheck>>;
+  savedAt: number;
+}
+
 const AREA_ORDER: AssessmentArea[] = ["foundations", "formation", "intercultural", "strategy", "evangelism"];
 
+// Falls back to an EMPTY second line (never the raw area id like
+// "foundations", which is what used to show when a label had no " | ").
 function areaLabel(area: AssessmentArea): [string, string] {
   const group = MODULE_GROUPS.find((g) => g.id === area);
   const parts = (group?.label ?? area).split(" | ");
-  return [parts[0] ?? area, parts[1] ?? area];
+  return [parts[0] ?? area, parts[1] ?? ""];
 }
 
-export default function AssessmentPanel() {
+function scrollToQuestion(id: number) {
+  setTimeout(() => {
+    document.getElementById(`q-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, 80);
+}
+
+export default function AssessmentPanel({ userKey = "anon" }: { userKey?: string }) {
   const [loading, setLoading] = useState(true);
   const [questions, setQuestions] = useState<ClientQuestion[]>([]);
   const [result, setResult] = useState<AssessmentResult | null>(null);
@@ -62,16 +78,101 @@ export default function AssessmentPanel() {
   const [checking, setChecking] = useState(false);
   const [checkError, setCheckError] = useState<string | null>(null);
 
+  // Areas where the person already tried to move on / check while some
+  // questions were still empty — those empty questions get highlighted.
+  const [flaggedAreas, setFlaggedAreas] = useState<Record<string, boolean>>({});
+
+  // ── Autosave ─────────────────────────────────────────────────────────
+  // 100 questions took a long time to answer and a reload wiped everything.
+  // Progress is now written to this browser as the person answers, and
+  // restored on return. (Device-bound by design: nothing extra is stored on
+  // the server for an unfinished assessment.)
+  const draftKey = `ghi_assessment_draft_v1:${userKey}`;
+  const [hydrated, setHydrated] = useState(false);
+  const [restored, setRestored] = useState(false);
+  const [lastSaved, setLastSaved] = useState<number | null>(null);
+
   useEffect(() => {
     fetch("/api/assessment")
       .then((r) => r.json())
       .then((data) => {
-        setQuestions(data.questions ?? []);
+        const qs: ClientQuestion[] = data.questions ?? [];
+        setQuestions(qs);
         setResult(data.result ?? null);
+        try {
+          if (data.result) {
+            window.localStorage.removeItem(draftKey); // already submitted: draft is obsolete
+          } else {
+            const raw = window.localStorage.getItem(draftKey);
+            if (raw) {
+              const d = JSON.parse(raw) as Draft;
+              const valid = new Set(qs.map((q) => q.id));
+              const back: Record<number, number> = {};
+              let n = 0;
+              for (const [k, v] of Object.entries(d.answers ?? {})) {
+                const id = Number(k);
+                if (valid.has(id) && typeof v === "number") {
+                  back[id] = v;
+                  n++;
+                }
+              }
+              if (n > 0) {
+                setAnswers(back);
+                setPageIndex(Math.min(Math.max(d.pageIndex ?? 0, 0), AREA_ORDER.length - 1));
+                setAreaChecks(d.areaChecks ?? {});
+                setRestored(true);
+              }
+            }
+          }
+        } catch {
+          /* corrupt or unavailable storage — start fresh */
+        }
         setLoading(false);
+        setHydrated(true);
       })
-      .catch(() => setLoading(false));
-  }, []);
+      .catch(() => {
+        setLoading(false);
+        setHydrated(true);
+      });
+  }, [draftKey]);
+
+  useEffect(() => {
+    if (!hydrated || result) return;
+    const t = setTimeout(() => {
+      try {
+        if (Object.keys(answers).length === 0 && Object.keys(areaChecks).length === 0) {
+          window.localStorage.removeItem(draftKey);
+          return;
+        }
+        const d: Draft = { answers, pageIndex, areaChecks, savedAt: Date.now() };
+        window.localStorage.setItem(draftKey, JSON.stringify(d));
+        setLastSaved(d.savedAt);
+      } catch {
+        /* storage full/unavailable — non-fatal */
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [hydrated, result, answers, pageIndex, areaChecks, draftKey]);
+
+  function startOver() {
+    if (
+      !window.confirm(
+        "Erase your saved answers and start over? · ¿Borrar tus respuestas guardadas y empezar de nuevo?"
+      )
+    )
+      return;
+    setAnswers({});
+    setAreaChecks({});
+    setFlaggedAreas({});
+    setPageIndex(0);
+    setRestored(false);
+    setLastSaved(null);
+    try {
+      window.localStorage.removeItem(draftKey);
+    } catch {
+      /* ignore */
+    }
+  }
 
   async function handleCheckArea(area: AssessmentArea) {
     setChecking(true);
@@ -114,6 +215,11 @@ export default function AssessmentPanel() {
       return;
     }
     setResult(data.result);
+    try {
+      window.localStorage.removeItem(draftKey);
+    } catch {
+      /* ignore */
+    }
   }
 
   if (loading) {
@@ -163,7 +269,7 @@ export default function AssessmentPanel() {
                   <div className="mb-1 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-semibold text-harvest-text">{labelPt}</p>
-                      <p className="text-xs text-harvest-textDim">{labelEs}</p>
+                      {labelEs && <p className="text-xs text-harvest-textDim">{labelEs}</p>}
                     </div>
                     <span className={clsx("text-sm font-bold", pct >= 0.6 ? "text-harvest-green" : "text-amber-600")}>
                       {score}/{max} {pct >= 0.6 ? "✅" : "⚠️"}
@@ -193,9 +299,44 @@ export default function AssessmentPanel() {
   const areaQuestions = questions.filter((q) => q.area === currentArea);
   const [labelPt, labelEs] = areaLabel(currentArea);
   const answeredInArea = areaQuestions.filter((q) => answers[q.id] !== undefined).length;
+  const unansweredInArea = areaQuestions.filter((q) => answers[q.id] === undefined);
+  const totalQuestions = questions.length || 100;
   const totalAnswered = Object.keys(answers).length;
   const isLastPage = pageIndex === AREA_ORDER.length - 1;
   const currentCheck = areaChecks[currentArea];
+  const areaFlagged = !!flaggedAreas[currentArea];
+
+  // Every empty question across the whole test, with where it lives.
+  const missingAll = AREA_ORDER.flatMap((area, ai) =>
+    questions
+      .filter((q) => q.area === area)
+      .map((q, qi) => ({ q, qi, ai, area }))
+      .filter((x) => answers[x.q.id] === undefined)
+  );
+
+  function flagArea(area: AssessmentArea) {
+    setFlaggedAreas((p) => ({ ...p, [area]: true }));
+  }
+
+  // Leaving an unfinished, unchecked area flags it, so the empty questions
+  // are highlighted if the person comes back.
+  function goToArea(i: number) {
+    if (unansweredInArea.length > 0 && !currentCheck) flagArea(currentArea);
+    setPageIndex(i);
+  }
+
+  // Checking LOCKS the area's answers (so they can't be changed after the
+  // right answers are shown). That made an unanswered question impossible to
+  // answer afterwards — so checking now requires the area to be complete.
+  function onCheckClick() {
+    const first = unansweredInArea[0];
+    if (first) {
+      flagArea(currentArea);
+      scrollToQuestion(first.id);
+      return;
+    }
+    handleCheckArea(currentArea);
+  }
 
   return (
     <div className="flex-1 overflow-y-auto bg-harvest-bg px-4 py-6">
@@ -206,32 +347,72 @@ export default function AssessmentPanel() {
             100 fixed questions, one time only, so your mentor gets to know your theological and missiological baseline. ·
             100 preguntas fijas, una única vez, para que tu mentor conozca tu base teológica y misionológica.
           </p>
+          <p className="mt-1 text-[11px] text-harvest-textDim">
+            💾 Your progress is saved automatically on this device. · Tu progreso se guarda automáticamente en este
+            dispositivo.
+            {lastSaved && (
+              <span className="opacity-70"> ({new Date(lastSaved).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})</span>
+            )}
+          </p>
         </div>
 
-        {/* Area tabs */}
-        <div className="mb-4 flex flex-wrap gap-1.5">
+        {restored && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-harvest-gold/30 bg-harvest-gold/5 px-4 py-2 text-xs text-harvest-textDim">
+            <span>We restored your saved progress. · Restauramos tu progreso guardado.</span>
+            <span className="flex gap-3">
+              <button onClick={startOver} className="font-semibold text-red-600 hover:underline">
+                Start over · Empezar de nuevo
+              </button>
+              <button onClick={() => setRestored(false)} className="font-semibold text-harvest-goldDeep hover:underline">
+                OK
+              </button>
+            </span>
+          </div>
+        )}
+
+        {/* Area tabs — the number is HOW MANY YOU ANSWERED; the "score" chip
+            only appears after you check that part. */}
+        <div className="mb-1 flex flex-wrap gap-1.5">
           {AREA_ORDER.map((area, i) => {
             const count = questions.filter((q) => q.area === area).length;
             const answeredCount = questions.filter((q) => q.area === area && answers[q.id] !== undefined).length;
             const checked = areaChecks[area];
+            const active = i === pageIndex;
             return (
               <button
                 key={area}
-                onClick={() => setPageIndex(i)}
+                onClick={() => goToArea(i)}
+                title={`Answered ${answeredCount} of ${count} · Respondidas ${answeredCount} de ${count}${
+                  checked ? ` — Score · Nota: ${checked.score}/${checked.total}` : ""
+                }`}
                 className={clsx(
                   "rounded-full px-3 py-1.5 text-xs font-semibold transition",
-                  i === pageIndex ? "bg-harvest-gold text-white" : "bg-harvest-panel2 text-harvest-textDim hover:text-harvest-text"
+                  active ? "bg-harvest-gold text-white" : "bg-harvest-panel2 text-harvest-textDim hover:text-harvest-text"
                 )}
               >
-                {i + 1}. {answeredCount}/{count} {checked ? `· ${checked.score}/${checked.total} ✓` : ""}
+                {i + 1}. {answeredCount}/{count}
+                {checked && (
+                  <span
+                    className={clsx(
+                      "ml-1.5 rounded-full px-1.5 py-0.5 text-[10px]",
+                      active ? "bg-white/25 text-white" : "bg-harvest-gold/10 text-harvest-goldDeep"
+                    )}
+                  >
+                    score {checked.score}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
+        <p className="mb-4 text-[11px] text-harvest-textDim">
+          Tabs show how many questions you have answered; a “score” appears after you check that part. · Las pestañas
+          muestran cuántas preguntas respondiste; al verificar esa parte aparece la “nota”.
+        </p>
 
         <div className="mb-4 rounded-xl border border-harvest-border bg-harvest-panel px-4 py-3 shadow-sm">
           <p className="text-sm font-semibold text-harvest-text">{labelPt}</p>
-          <p className="text-xs text-harvest-textDim">{labelEs}</p>
+          {labelEs && <p className="text-xs text-harvest-textDim">{labelEs}</p>}
         </div>
 
         {currentCheck && (
@@ -245,16 +426,36 @@ export default function AssessmentPanel() {
           {areaQuestions.map((q, qi) => {
             const questionCheck = currentCheck?.byQuestionId[q.id];
             const selected = answers[q.id];
+            const showMissing = selected === undefined && areaFlagged && !questionCheck;
             return (
-              <div key={q.id} className="rounded-2xl border border-harvest-border bg-harvest-panel p-5 shadow-sm">
-                <span className="rounded-full bg-harvest-gold/10 px-2.5 py-0.5 text-xs font-bold tracking-wide text-harvest-goldDeep">
-                  {qi + 1}/{areaQuestions.length}
-                </span>
+              <div
+                key={q.id}
+                id={`q-${q.id}`}
+                className={clsx(
+                  "rounded-2xl border bg-harvest-panel p-5 shadow-sm transition",
+                  showMissing ? "border-amber-400 ring-2 ring-amber-200" : "border-harvest-border"
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-harvest-gold/10 px-2.5 py-0.5 text-xs font-bold tracking-wide text-harvest-goldDeep">
+                    {qi + 1}/{areaQuestions.length}
+                  </span>
+                  {showMissing && (
+                    <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+                      Unanswered · Sin responder
+                    </span>
+                  )}
+                </div>
                 <p className="mt-2 font-semibold text-harvest-text">{q.question_pt}</p>
                 <p className="mt-1 text-sm text-harvest-textDim">{q.question_es}</p>
 
                 <div className="mt-3 flex flex-col gap-2">
                   {q.options_pt.map((optPt, oi) => {
+                    // Once this area has been checked, color every option:
+                    // the actual correct one green, and — if different — the
+                    // person's own wrong pick red. Before checking, only the
+                    // plain "selected" highlight applies (no colors, since
+                    // the correct answer isn't known to the client yet).
                     const isCorrectOption = questionCheck && oi === questionCheck.correct;
                     const isWrongSelected = questionCheck && !questionCheck.isCorrect && oi === selected;
                     return (
@@ -303,18 +504,32 @@ export default function AssessmentPanel() {
 
         {!currentCheck && (
           <button
-            onClick={() => handleCheckArea(currentArea)}
+            onClick={onCheckClick}
             disabled={checking || answeredInArea === 0}
-            className="mt-4 w-full rounded-xl border border-harvest-gold bg-harvest-gold/5 px-4 py-2.5 text-sm font-semibold text-harvest-goldDeep transition hover:bg-harvest-gold/15 disabled:opacity-40"
+            className={clsx(
+              "mt-4 w-full rounded-xl border px-4 py-2.5 text-sm font-semibold transition disabled:opacity-40",
+              unansweredInArea.length > 0
+                ? "border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                : "border-harvest-gold bg-harvest-gold/5 text-harvest-goldDeep hover:bg-harvest-gold/15"
+            )}
           >
-            {checking ? "Checking… · Verificando…" : "✓ Check my answers for this part · Verificar mis respuestas de esta parte"}
+            {checking
+              ? "Checking… · Verificando…"
+              : unansweredInArea.length > 0
+              ? `Answer all questions to check — ${unansweredInArea.length} left · Responde todas para verificar — faltan ${unansweredInArea.length}`
+              : "✓ Check my answers for this part · Verificar mis respuestas de esta parte"}
           </button>
+        )}
+        {!currentCheck && unansweredInArea.length === 0 && areaQuestions.length > 0 && (
+          <p className="mt-1 text-center text-[11px] text-harvest-textDim">
+            Checking shows the right answers and locks this part. · Al verificar se muestran las respuestas correctas y esta parte se bloquea.
+          </p>
         )}
         {checkError && <p className="mt-2 text-sm text-red-600">{checkError}</p>}
 
         <div className="mt-5 flex items-center justify-between">
           <button
-            onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
+            onClick={() => goToArea(Math.max(0, pageIndex - 1))}
             disabled={pageIndex === 0}
             className="rounded-full border border-harvest-border px-4 py-2 text-sm text-harvest-textDim transition hover:border-harvest-gold/50 disabled:opacity-30"
           >
@@ -323,7 +538,7 @@ export default function AssessmentPanel() {
 
           {!isLastPage ? (
             <button
-              onClick={() => setPageIndex((p) => Math.min(AREA_ORDER.length - 1, p + 1))}
+              onClick={() => goToArea(Math.min(AREA_ORDER.length - 1, pageIndex + 1))}
               className="rounded-full bg-harvest-gold px-5 py-2 text-sm font-semibold text-white transition hover:bg-harvest-goldDeep"
             >
               Next area · Área siguiente →
@@ -334,17 +549,47 @@ export default function AssessmentPanel() {
               disabled={submitting}
               className="rounded-full bg-harvest-gold px-5 py-2 text-sm font-semibold text-white transition hover:bg-harvest-goldDeep disabled:opacity-40"
             >
-              {submitting ? "Submitting… · Enviando…" : `Submit (${totalAnswered}/100 answered) · Enviar (${totalAnswered}/100 respondidas)`}
+              {submitting
+                ? "Submitting… · Enviando…"
+                : `Submit (${totalAnswered}/${totalQuestions} answered) · Enviar (${totalAnswered}/${totalQuestions} respondidas)`}
             </button>
           )}
         </div>
 
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-        {isLastPage && totalAnswered < 100 && (
-          <p className="mt-3 text-xs text-amber-600">
-            You still have {100 - totalAnswered} unanswered questions — you can submit anyway, but they will count as wrong. ·
-            Todavía faltan {100 - totalAnswered} preguntas sin responder — puedes enviar de todas formas, pero contarán como incorrectas.
-          </p>
+
+        {/* Before: a bare "you have 1 unanswered question" with no way to
+            tell WHICH. Now each empty question is a button that jumps to it. */}
+        {isLastPage && missingAll.length > 0 && (
+          <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+            <p>
+              You still have {missingAll.length} unanswered {missingAll.length === 1 ? "question" : "questions"} — tap one
+              to jump to it. You can submit anyway, but unanswered ones count as wrong. · Aún tienes {missingAll.length}{" "}
+              {missingAll.length === 1 ? "pregunta sin responder" : "preguntas sin responder"} — toca una para ir a ella.
+              Puedes enviar así, pero las no respondidas cuentan como incorrectas.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {missingAll.map((m) => (
+                <button
+                  key={m.q.id}
+                  onClick={() => {
+                    flagArea(m.area);
+                    setPageIndex(m.ai);
+                    scrollToQuestion(m.q.id);
+                  }}
+                  className="rounded-full border border-amber-400 bg-white px-2.5 py-1 font-semibold hover:bg-amber-100"
+                >
+                  Area {m.ai + 1} · Q{m.qi + 1}
+                  {areaChecks[m.area] ? " 🔒" : ""}
+                </button>
+              ))}
+            </div>
+            {missingAll.some((m) => areaChecks[m.area]) && (
+              <p className="mt-2 opacity-80">
+                🔒 = that part was already checked and is locked. · esa parte ya fue verificada y está bloqueada.
+              </p>
+            )}
+          </div>
         )}
       </div>
     </div>
