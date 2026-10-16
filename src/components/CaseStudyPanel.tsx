@@ -54,6 +54,26 @@ function caseToSpeechText(theCase: CaseStudy, lang: GenLangMode): string {
   return parts.filter(Boolean).join(". ");
 }
 
+// A case is "available" in a language when its main text fields exist there (the
+// generator fills missing required fields with "—", which must not count).
+function hasLang(c: CaseStudy, l: string): boolean {
+  const r = c as unknown as Record<string, unknown>;
+  return ["title", "context", "challenge", "recommended_approach"].every((f) => {
+    const v = r[`${f}_${l}`];
+    return typeof v === "string" && v.trim() !== "" && v.trim() !== "—";
+  });
+}
+
+// The pair of languages shown together in "all" mode in this deployment.
+const PAIR: string[] = ["pt", "es"];
+
+const TX = {
+  notice: (langs: string) => `This case was generated without ${langs}. Translate it to read it here. · Este caso se generó sin ${langs}. Tradúcelo para leerlo aquí.`,
+  button: (langs: string) => `🌐 Translate this case to ${langs} · Traducir este caso a ${langs}`,
+  translating: "Translating… · Traduciendo…",
+  error: "Could not translate the case. Please try again. · No se pudo traducir el caso. Inténtalo de nuevo.",
+};
+
 export default function CaseStudyPanel({
   selectedModule,
   userKey = "anon",
@@ -94,7 +114,7 @@ export default function CaseStudyPanel({
   }, [draftKey]);
   useEffect(() => {
     if (!hydrated) return;
-    const t = setTimeout(() => {
+    {
       try {
         if (result?.cases?.length) {
           window.localStorage.setItem(
@@ -107,8 +127,7 @@ export default function CaseStudyPanel({
       } catch {
         /* storage full/unavailable — non-fatal */
       }
-    }, 300);
-    return () => clearTimeout(t);
+    }
   }, [hydrated, result, module, lang, instructions, draftKey]);
 
   // Follow the sidebar: picking a module there pre-selects it here.
@@ -131,6 +150,44 @@ export default function CaseStudyPanel({
     const data = (await res.json()) as CaseStudyResult;
     setResult(data);
     setLoading(false);
+  }
+
+  // ── Translate an already-generated case ──────────────────────────────
+  // Switching to a language the case was not generated in used to show empty
+  // fields, forcing a brand-new (different) case. Now the existing case is
+  // translated instead — same case, new language — via /api/case-study/translate.
+  const [translating, setTranslating] = useState(false);
+  const [translateError, setTranslateError] = useState<string | null>(null);
+  const caseNow = result?.cases?.[0];
+  const neededLangs: string[] = lang === "all" ? PAIR : [lang];
+  const missingLangs: string[] = caseNow ? neededLangs.filter((l) => !hasLang(caseNow, l)) : [];
+  const missingNames = missingLangs
+    .map((l) => LANGUAGE_LABELS[l as keyof typeof LANGUAGE_LABELS] ?? l)
+    .join(", ");
+
+  async function translateMissing() {
+    if (!caseNow || translating) return;
+    setTranslating(true);
+    setTranslateError(null);
+    try {
+      let current: CaseStudy = caseNow;
+      for (const target of missingLangs) {
+        const res = await fetch("/api/case-study/translate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ case: current, targetLang: target }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.case) throw new Error(data?.error ?? "translation failed");
+        current = data.case as CaseStudy;
+      }
+      const finalCase = current;
+      setResult((prev) => (prev ? { ...prev, cases: [finalCase, ...(prev.cases ?? []).slice(1)] } : prev));
+    } catch {
+      setTranslateError(TX.error);
+    } finally {
+      setTranslating(false);
+    }
   }
 
   const theCase = result?.cases?.[0];
@@ -241,7 +298,21 @@ export default function CaseStudyPanel({
           </div>
         )}
 
-        {theCase && (
+        {theCase && missingLangs.length > 0 && (
+          <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <p>{TX.notice(missingNames)}</p>
+            <button
+              onClick={translateMissing}
+              disabled={translating}
+              className="mt-3 rounded-full bg-harvest-gold px-4 py-2 text-xs font-semibold text-white transition hover:bg-harvest-goldDeep disabled:opacity-50"
+            >
+              {translating ? TX.translating : TX.button(missingNames)}
+            </button>
+            {translateError && <p className="mt-2 text-xs text-red-600">{translateError}</p>}
+          </div>
+        )}
+
+        {theCase && !(lang !== "all" && missingLangs.length > 0) && (
           <article className="rounded-2xl border border-harvest-border bg-harvest-panel p-6 shadow-sm">
             <h2 className="font-serif text-lg font-semibold text-harvest-text">{title?.primary}</h2>
             {title?.secondary && <p className="mb-4 text-sm text-harvest-textDim">{title.secondary}</p>}

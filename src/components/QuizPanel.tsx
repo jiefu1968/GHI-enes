@@ -6,6 +6,8 @@ import type { QuizResult, QuizQuestion } from "@/lib/quiz";
 import { MODULE_NAMES } from "@/lib/curriculumConfigClient";
 import { LANGUAGE_LABELS, type GenLangMode } from "@/lib/language";
 import { exportQuizToPdf } from "@/lib/pdfExport";
+import { DotNav, ProgressBar, ViewToggle, useViewMode } from "./Stepper";
+import type { DotItem, DotStatus } from "./Stepper";
 
 const LETTERS = ["a", "b", "c", "d", "e"] as const;
 
@@ -86,7 +88,7 @@ export default function QuizPanel({
   }, [draftKey]);
   useEffect(() => {
     if (!hydrated) return;
-    const t = setTimeout(() => {
+    {
       try {
         if (result?.questions?.length) {
           window.localStorage.setItem(
@@ -99,13 +101,27 @@ export default function QuizPanel({
       } catch {
         /* storage full/unavailable — non-fatal */
       }
-    }, 300);
-    return () => clearTimeout(t);
+    }
   }, [hydrated, result, answers, revealed, module, lang, instructions, draftKey]);
 
   // Follow the sidebar: picking a specialist/module there pre-selects it
   // here. (Previously the menu only read the value at first render, so
   // clicking the sidebar looked like it did nothing.)
+  // ── "One question per screen" mode (see Stepper.tsx) ────────────────
+  const [viewMode, setViewMode] = useViewMode();
+  const [stepIndex, setStepIndex] = useState(0);
+  const stepRef = useRef<HTMLDivElement>(null);
+  // After restoring a saved quiz, land on the first question not yet revealed.
+  useEffect(() => {
+    if (!restored) return;
+    const idx = (result?.questions ?? []).findIndex((q) => !revealed[q.n]);
+    setStepIndex(idx === -1 ? 0 : idx);
+  }, [restored]);
+  // A freshly generated quiz starts at its first question.
+  useEffect(() => {
+    if (loading) setStepIndex(0);
+  }, [loading]);
+
   const prevSelected = useRef(selectedModule);
   useEffect(() => {
     if (prevSelected.current === selectedModule) return;
@@ -130,6 +146,24 @@ export default function QuizPanel({
   }
 
   const questions = result?.questions ?? [];
+  const stepMode = viewMode === "one";
+  const stepIdx = Math.min(Math.max(stepIndex, 0), Math.max(questions.length - 1, 0));
+  const curQuestion = questions[stepIdx];
+  const dotItems: DotItem[] = questions.map((q, i) => {
+    const isRevealed = !!revealed[q.n];
+    const status: DotStatus = isRevealed
+      ? answers[q.n] === q.correct
+        ? "correct"
+        : "wrong"
+      : answers[q.n] !== undefined
+      ? "answered"
+      : "empty";
+    return { status, label: String(i + 1) };
+  });
+  function goStep(i: number) {
+    setStepIndex(i);
+    setTimeout(() => stepRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+  }
   const answeredCount = Object.keys(revealed).length;
   const correctCount = questions.filter((q) => revealed[q.n] && answers[q.n] === q.correct).length;
 
@@ -232,19 +266,60 @@ export default function QuizPanel({
             <h2 className="mb-4 font-serif font-semibold text-harvest-text">
               📝 {result?.module_title} — {questions.length} questions · preguntas
             </h2>
-            <div className="flex flex-col gap-4">
-              {questions.map((q) => (
-                <QuestionCard
-                  key={q.n}
-                  q={q}
-                  lang={lang}
-                  selected={answers[q.n]}
-                  revealed={!!revealed[q.n]}
-                  onSelect={(letter) => setAnswers((prev) => ({ ...prev, [q.n]: letter }))}
-                  onReveal={() => setRevealed((prev) => ({ ...prev, [q.n]: true }))}
-                />
-              ))}
+            <div className="sticky top-0 z-10 mb-3 bg-harvest-bg py-2">
+              <ProgressBar value={answeredCount} max={questions.length} label={`Progress: ${answeredCount}/${questions.length} completed · Progreso: ${answeredCount}/${questions.length} completadas`} />
             </div>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div ref={stepRef} className="scroll-mt-16">
+                {stepMode && <DotNav items={dotItems} current={stepIdx} onJump={goStep} />}
+              </div>
+              <ViewToggle mode={viewMode} onChange={setViewMode} oneLabel="One at a time · Una por vez" allLabel="All · Todas" />
+            </div>
+            {stepMode ? (
+              <>
+                {curQuestion && (
+                  <QuestionCard
+                    key={curQuestion.n}
+                    q={curQuestion}
+                    lang={lang}
+                    selected={answers[curQuestion.n]}
+                    revealed={!!revealed[curQuestion.n]}
+                    onSelect={(letter) => setAnswers((prev) => ({ ...prev, [curQuestion.n]: letter }))}
+                    onReveal={() => setRevealed((prev) => ({ ...prev, [curQuestion.n]: true }))}
+                  />
+                )}
+                <div className="mt-4 flex items-center justify-between">
+                  <button
+                    onClick={() => goStep(stepIdx - 1)}
+                    disabled={stepIdx === 0}
+                    className="rounded-full border border-harvest-border px-4 py-2 text-sm text-harvest-textDim transition hover:border-harvest-gold/50 disabled:opacity-30"
+                  >
+                    ← Previous · Anterior
+                  </button>
+                  <button
+                    onClick={() => goStep(stepIdx + 1)}
+                    disabled={stepIdx >= questions.length - 1}
+                    className="rounded-full bg-harvest-gold px-5 py-2 text-sm font-semibold text-white transition hover:bg-harvest-goldDeep disabled:opacity-30"
+                  >
+                    Next · Siguiente →
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {questions.map((q) => (
+                  <QuestionCard
+                    key={q.n}
+                    q={q}
+                    lang={lang}
+                    selected={answers[q.n]}
+                    revealed={!!revealed[q.n]}
+                    onSelect={(letter) => setAnswers((prev) => ({ ...prev, [q.n]: letter }))}
+                    onReveal={() => setRevealed((prev) => ({ ...prev, [q.n]: true }))}
+                  />
+                ))}
+              </div>
+            )}
 
             {answeredCount === questions.length && (
               <div className="mt-6 rounded-2xl border border-harvest-gold/30 bg-harvest-panel p-6 text-center shadow-sm">
