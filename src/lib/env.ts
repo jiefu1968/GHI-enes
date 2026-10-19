@@ -8,6 +8,8 @@
 // lets it through as "" instead of falling back. That produced very
 // confusing "model `` does not exist" errors. This helper treats blank
 // the same as unset for every optional env var below.
+import { enforceSecurityConfig } from "./securityConfig";
+
 function envOr(value: string | undefined, fallback: string): string {
   return value && value.trim() !== "" ? value : fallback;
 }
@@ -131,23 +133,15 @@ export const REINDEX_TOKEN = (process.env.REINDEX_TOKEN ?? "").trim();
 // Used to sign session cookies (see lib/auth.ts). Set a real secret in prod.
 export const SESSION_SECRET = envOr(process.env.SESSION_SECRET, "dev-only-insecure-secret-change-me");
 
-// If this is left at a known placeholder in production, every session
-// cookie is signed with a publicly-known key and is therefore forgeable
-// (anyone can mint a valid "mentor" session). We warn loudly rather than
-// crash on boot: crashing would take a running deployment down hard on a
-// misconfigured redeploy, whereas a prominent, greppable log line lets ops
-// fix it without an outage. Rotate with `openssl rand -base64 32`.
-const INSECURE_SECRET_PLACEHOLDERS = new Set([
-  "dev-only-insecure-secret-change-me",
-  "change-me-to-a-real-random-secret",
-]);
-if (process.env.NODE_ENV === "production" && INSECURE_SECRET_PLACEHOLDERS.has(SESSION_SECRET)) {
-  console.error(
-    JSON.stringify({
-      level: "error",
-      message:
-        "SECURITY: SESSION_SECRET is set to a known placeholder in production — session cookies are forgeable. Set a real random value (openssl rand -base64 32) and redeploy.",
-      timestamp: new Date().toISOString(),
-    })
-  );
-}
+// Warn (always) and optionally refuse to start (ENFORCE_SECURE_CONFIG=true) when a secret or access
+// code is still at a publicly-known default in production. See lib/securityConfig.ts.
+enforceSecurityConfig({
+  nodeEnv: process.env.NODE_ENV,
+  sessionSecret: SESSION_SECRET,
+  accessCode: ACCESS_CODE,
+  mentorAccessCode: MENTOR_ACCESS_CODE,
+  enforce: (process.env.ENFORCE_SECURE_CONFIG ?? "").trim().toLowerCase() === "true",
+  // Deliberately kept old codes: acknowledge them to silence the warning (see lib/securityConfig.ts).
+  acceptDefaultAccessCode: (process.env.ACCEPT_DEFAULT_ACCESS_CODE ?? "").trim().toLowerCase() === "true",
+  acceptDefaultMentorCode: (process.env.ACCEPT_DEFAULT_MENTOR_CODE ?? "").trim().toLowerCase() === "true",
+});
